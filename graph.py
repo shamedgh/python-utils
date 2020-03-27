@@ -212,10 +212,32 @@ class Graph():
             if ( not edgeType or (edgeType and edgeType == self.getEdgeType(srcNode, node))):
                 self.deleteEdgeByTuple((srcNode, node))
 
-    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+    def extractIndirectOnlyFunctions(self, directCfgFile, separator):
+        self.applyDirectGraph(directCfgFile, separator)
+        indirectFunctions = set()
+        
+        for node, callers in self.reverseAdjGraph.items():
+            directCallerSet = set()
+            for caller in callers:
+                if self.getEdgeType(caller, node) == self.DIRECT:
+                    directCallerSet.add(caller)
+                    break
+            if ( len(directCallerSet) == 0 ):
+                indirectFunctions.add(node)
+        return indirectFunctions
 
+    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
+
+        #3/26/2020
+        #Do you we have to consider all functions only called through indirect call sites
+        #which don't have their address taken at all?
+        #Currently we're only removing those which have their address taken in paths unreachable 
+        #from main, but it seems that there could be functions which don't have their address 
+        #taken at all???
+        #Won't add to keep this function in accordance with submitted version of paper!
+        #Could it be that these functions would be removed by dead code elimination of the compiler??
 
         #Read function pointer file:
         #function (A)->function pointed to by FP (B)
