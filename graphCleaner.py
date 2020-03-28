@@ -14,7 +14,7 @@ def isValidOpts(opts):
     :param opts:
     :return:
     """
-    if not options.cleancfg and not options.fpanalysis and not options.minremovable:
+    if not options.cleancfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew:
         parser.error("At least one of the functionalities: cleancfg, fpanalysis or minremovable should be used")
         return False
     if not options.cfginput:
@@ -24,7 +24,7 @@ def isValidOpts(opts):
     if options.cleancfg and (not options.cfginput or not options.separator or not options.input):
         parser.error("All options -c, -i and -s should be provided.")
         return False
-    elif options.fpanalysis and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
+    elif (options.fpanalysis or options.fpanalysisnew) and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
         parser.error("All options --funcname, --output, --directgraphfile, --funcpointerfile should be provided.")
         return False
     elif options.minremovable and (not options.conditionalgraphfile or not options.minremovestart or not options.minremoveend or not options.minremovemaxdepth):
@@ -86,6 +86,9 @@ if __name__ == '__main__':
     parser.add_option("-v", "--inverse", dest="inverse", action="store_true", default=False, help="Starting points which should be removed or kept")
 
     ### Function Pointer Analysis ###
+    parser.add_option("", "--fpanalysisnew", dest="fpanalysisnew", action="store_true", default=False,
+                      help="Fun function pointer analysis")
+
     parser.add_option("", "--fpanalysis", dest="fpanalysis", action="store_true", default=False,
                       help="Fun function pointer analysis")
 
@@ -177,5 +180,7 @@ if __name__ == '__main__':
 
         elif ( options.fpanalysis ):
             myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
+        elif ( options.fpanalysisnew ):
+            myGraph.pruneAllFunctionPointersNotAccessibleFromChild(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
         elif ( options.minremovable ):
             myGraph.minimumRemovableEdges(options.conditionalgraphfile, options.separator, options.minremovestart, options.minremoveend, int(options.minremovemaxdepth))
