@@ -702,6 +702,13 @@ def convertBytes(num):
             return "%3.1f %s" % (num, x)
         num /= 1024.0
 
+def convertStrListToList(listStr):
+    listStr = listStr.replace("{", "")
+    listStr = listStr.replace("}", "")
+    listStr = listStr.replace(" ", "")
+    return listStr.split(",")
+
+
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
     getBBLsFromIDA()
