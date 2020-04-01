@@ -709,6 +709,7 @@ def convertStrListToList(listStr):
     return listStr.split(",")
 
 def cleanStrList(listStr):
+    listStr = str(listStr)
     listStr = listStr.replace("{", "")
     listStr = listStr.replace("}", "")
     listStr = listStr.replace("'", "")
