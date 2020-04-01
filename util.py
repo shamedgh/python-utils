@@ -708,6 +708,12 @@ def convertStrListToList(listStr):
     listStr = listStr.replace(" ", "")
     return listStr.split(",")
 
+def cleanStrList(listStr):
+    listStr = listStr.replace("{", "")
+    listStr = listStr.replace("}", "")
+    listStr = listStr.replace("'", "")
+    listStr = listStr.replace('"', '')
+    return listStr
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
