@@ -693,6 +693,28 @@ def usesMusl(folder):
             return True
     return False
 
+def convertBytes(num):
+    """
+    this function will convert bytes to MB.... GB... etc
+    """
+    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+        if num < 1024.0:
+            return "%3.1f %s" % (num, x)
+        num /= 1024.0
+
+def convertStrListToList(listStr):
+    listStr = listStr.replace("{", "")
+    listStr = listStr.replace("}", "")
+    listStr = listStr.replace(" ", "")
+    return listStr.split(",")
+
+def cleanStrList(listStr):
+    listStr = str(listStr)
+    listStr = listStr.replace("{", "")
+    listStr = listStr.replace("}", "")
+    listStr = listStr.replace("'", "")
+    listStr = listStr.replace('"', '')
+    return listStr
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)

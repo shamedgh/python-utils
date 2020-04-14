@@ -212,10 +212,80 @@ class Graph():
             if ( not edgeType or (edgeType and edgeType == self.getEdgeType(srcNode, node))):
                 self.deleteEdgeByTuple((srcNode, node))
 
-    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+    '''
+    The difference of this function compared to pruneInaccessibleFunctionPointers is that in this we consider 
+    all functions used as indirect call site targets as our base and not only the function pointer file.
+    After we reach a conclusion on the correctness of applying this to the main function we can merge these 
+    two funtions.
+    For now we won't to keep the code which generated the paper results intact
+    '''
+    def pruneAllFunctionPointersNotAccessibleFromChild(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+        indirectOnlyFunctions = self.extractIndirectOnlyFunctions(directCfgFile, separator)
+        fpFuncToCaller = dict()
 
+        fpFile = open(funcPointerFile, 'r')
+        fpLine = fpFile.readline()
+        while ( fpLine ):
+            #Iterate over each fp file line
+            if ( "->" in fpLine ):
+                splittedLine = fpLine.split("->")
+                caller = splittedLine[0].strip()
+                fpFunc = splittedLine[1].strip()
+                self.logger.debug("caller: %s, fp: %s", caller, fpFunc)
+                fpFuncSet = fpFuncToCaller.get(fpFunc, set())
+                fpFuncSet.add(caller)
+                fpFuncToCaller[fpFunc] = fpFuncSet
+            else:
+                self.logger.warning("Skipping function pointer line: %s", fpLine)
+
+            fpLine = fpFile.readline()
+
+        for fpFunc in indirectOnlyFunctions:
+#        for fpFunc, callerSet in fpFuncToCaller.items():
+            callerSet = fpFuncToCaller.get(fpFunc, set())
+            tmpClone = self.deepCopy()
+            
+            #Temporarily remove outbound edges from B
+            tmpClone.deleteOutboundEdges(fpFunc)
+            reachableSet = set()
+            for caller in callerSet:
+                #Check if caller is reachable from start node
+                reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+            self.logger.debug("Reachable Set: %s", str(reachableSet))
+            callerReachable = (len(reachableSet) > 0)
+            self.logger.debug("caller: %s isReachable from child/worker? %s", caller, callerReachable)
+            #If caller isn't reachable, permanently remove all indirect calls to B
+            if ( not callerReachable ):
+                self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+        #Write final graph to file
+        self.dumpToFile(outputFile)
+
+    def extractIndirectOnlyFunctions(self, directCfgFile, separator):
+        self.applyDirectGraph(directCfgFile, separator)
+        indirectFunctions = set()
+        
+        for node, callers in self.reverseAdjGraph.items():
+            directCallerSet = set()
+            for caller in callers:
+                if self.getEdgeType(caller, node) == self.DIRECT:
+                    directCallerSet.add(caller)
+                    break
+            if ( len(directCallerSet) == 0 ):
+                indirectFunctions.add(node)
+        return indirectFunctions
+
+    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
+
+        #3/26/2020
+        #Do we have to consider all functions only called through indirect call sites
+        #which don't have their address taken at all?
+        #Currently we're only removing those which have their address taken in paths unreachable 
+        #from main, but it seems that there could be functions which don't have their address 
+        #taken at all???
+        #Won't add to keep this function in accordance with submitted version of paper!
+        #Could it be that these functions would be removed by dead code elimination of the compiler??
 
         #Read function pointer file:
         #function (A)->function pointed to by FP (B)

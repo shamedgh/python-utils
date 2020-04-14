@@ -16,16 +16,35 @@ class CallFunctionGraph():
                 cfgfilepath = cfgfilepath[cfgfilepath.rfind("/")+1:]
             self.cfgfilepath = cfgfilepath
 
-    #Can be used to extract list of functions required and not required considering the passed starting nodes
-    def partitionCfg(self, requiredStartNodeList, functionToCveDict=None):
+    def integrateCves(self, requiredStartNodeList, functionToCveDict):
         allStartNodes = self.graph.extractStartingNodes()
-        if ( functionToCveDict ):
-            startNodeToCveDict = dict()
-            cveToStartNodeDict = dict()
-        else:
-            startNodeToCveDict = None
-            cveToStartNodeDict = None
+        startNodeToCveDict = dict()
+        cveToStartNodeDict = dict()
 
+        if ( not self.nodeDfsDict ):
+            self.nodeDfsDict = self.createAllDfs(allStartNodes)
+
+        for startNode, nodeSet in self.nodeDfsDict.items():
+            if ( startNode.strip() != "" ):
+                if ( functionToCveDict ):
+                    for functionName, cveSet in functionToCveDict.items():
+                        if ( functionName in nodeSet ):
+                            tempSet = startNodeToCveDict.get(startNode, set())
+                            tempSet.update(cveSet)
+                            startNodeToCveDict[startNode] = tempSet
+            else:
+                self.logger.warning("Skipping empty start node from nodeDfsDict")
+        for startNode, cveSet in startNodeToCveDict.items():
+            for cve in cveSet:
+                tempSet = cveToStartNodeDict.get(cve, set())
+                tempSet.add(startNode)
+                cveToStartNodeDict[cve] = tempSet
+
+        return startNodeToCveDict, cveToStartNodeDict
+
+    #Can be used to extract list of functions required and not required considering the passed starting nodes
+    def partitionCfg(self, requiredStartNodeList):
+        allStartNodes = self.graph.extractStartingNodes()
         self.logger.debug("All start nodes extracted: %s", str(allStartNodes))
         requiredNodes = set()
         unrequiredNodes = set()
@@ -42,24 +61,10 @@ class CallFunctionGraph():
                     #if ( "__sys_recvmmsg" in nodeSet ):
                     #    self.logger.debug("nodeDfsDict for nonrequired startNode: %s is: %s", startNode, str(nodeDfsDict.get(startNode, set())))
                     unrequiredNodes.update(self.nodeDfsDict.get(startNode, set()))
-                if ( functionToCveDict ):
-                    for functionName, cveSet in functionToCveDict.items():
-                        if ( functionName in nodeSet ):
-                            tempSet = startNodeToCveDict.get(startNode, set())
-                            tempSet.update(cveSet)
-                            startNodeToCveDict[startNode] = tempSet
             else:
                 self.logger.warning("Skipping empty start node from nodeDfsDict")
-        #finalRequiredNodes = requiredNodes - unrequiredNodes
-        #finalUnrequiredNodes = unrequiredNodes - requiredNodes
 
-        for startNode, cveSet in startNodeToCveDict.items():
-            for cve in cveSet:
-                tempSet = cveToStartNodeDict.get(cve, set())
-                tempSet.add(startNode)
-                cveToStartNodeDict[cve] = tempSet
-
-        return requiredNodes, unrequiredNodes, startNodeToCveDict, cveToStartNodeDict
+        return requiredNodes, unrequiredNodes
 
     def removeSelectStartNodes(self, startNodeList, inverse=True):
         #TODO How to extract complete list of start nodes which can be removed???
