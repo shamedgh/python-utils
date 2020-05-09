@@ -716,6 +716,11 @@ def cleanStrList(listStr):
     listStr = listStr.replace('"', '')
     return listStr
 
+def getSystemAvailableMemory():
+    from psutil import virtual_memory
+    mem = virtual_memory()
+    return mem.available
+
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
     getBBLsFromIDA()
