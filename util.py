@@ -721,6 +721,11 @@ def getAvailableSystemMemory():
     mem = virtual_memory()
     return mem.available
 
+def getAvailableSystemMemoryInMB():
+    from psutil import virtual_memory
+    mem = virtual_memory()
+    return mem.available/(1000000)
+
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
     getBBLsFromIDA()
