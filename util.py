@@ -716,7 +716,7 @@ def cleanStrList(listStr):
     listStr = listStr.replace('"', '')
     return listStr
 
-def getSystemAvailableMemory():
+def getAvailableSystemMemory():
     from psutil import virtual_memory
     mem = virtual_memory()
     return mem.available
