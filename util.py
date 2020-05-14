@@ -721,10 +721,16 @@ def getAvailableSystemMemory():
     mem = virtual_memory()
     return mem.available
 
-def getAvailableSystemMemoryInMB():
+def getTotalSystemMemory():
     from psutil import virtual_memory
     mem = virtual_memory()
-    return mem.available/(1000000)
+    return mem.total
+
+def getAvailableSystemMemoryInMB():
+    return getAvailableSystemMemory()/(1000000)
+
+def getTotalSystemMemoryInMB():
+    return getTotalSystemMemory()/(1000000)
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
