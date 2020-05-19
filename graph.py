@@ -504,7 +504,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                 elif ( len(splittedInput) == 3 ):
@@ -514,7 +514,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.CONDITIONAL
                     self.edgeCondition[self.edgeTupleToId[(caller, callee)]] = condition
@@ -535,7 +535,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                 elif ( len(splittedInput) == 3 ):
@@ -545,7 +545,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                     self.edgeCondition[self.edgeTupleToId[(caller, callee)]] = condition
