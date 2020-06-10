@@ -1,11 +1,18 @@
 #!/bin/bash
 
-CMD=$1
-ARGS=$2
+RUNCOUNT=$1
+CMD=$2
+ARGS=$3
 
-SECONDS=0;
 echo "cmd: $CMD $ARGS";
-
-$CMD $ARGS;
+counter=0
+while [ $counter -le $RUNCOUNT ]
+do
+    SECONDS=0;
+    echo "Running for $counter time";
+    $CMD $ARGS;
+    ((counter++))
+    echo $SECONDS >> out.log
+done
 
 echo "----------------> It took $SECONDS seconds";

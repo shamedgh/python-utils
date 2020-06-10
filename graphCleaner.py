@@ -14,7 +14,7 @@ def isValidOpts(opts):
     :param opts:
     :return:
     """
-    if not options.cleancfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew:
+    if not options.cleancfg and not options.ccfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew:
         parser.error("At least one of the functionalities: cleancfg, fpanalysis or minremovable should be used")
         return False
     if not options.cfginput:
@@ -23,6 +23,9 @@ def isValidOpts(opts):
 
     if options.cleancfg and (not options.cfginput or not options.separator or not options.input):
         parser.error("All options -c, -i and -s should be provided.")
+        return False
+    elif options.ccfg and (not options.startfunc or not options.targetfunc):
+        parser.error("All options -c, --startfunc and --targetfunc should be provided.")
         return False
     elif (options.fpanalysis or options.fpanalysisnew) and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
         parser.error("All options --funcname, --output, --directgraphfile, --funcpointerfile should be provided.")
@@ -76,6 +79,16 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output", default=None, nargs=1,
                       help="Path to store cleaned CFG output")
 
+    ### Conditional CFG Options ###
+    parser.add_option("", "--ccfg", dest="ccfg", action="store_true", default=False,
+                      help="Conditional control flow graph")
+
+    parser.add_option("", "--startfunc", dest="startfunc", default=None, nargs=1,
+                      help="Start function")
+
+    parser.add_option("", "--targetfunc", dest="targetfunc", default=None, nargs=1,
+                      help="Target function")
+
     ### Kernel CFG Cleaner Options ###
     parser.add_option("", "--cleancfg", dest="cleancfg", action="store_true", default=False,
                       help="Clean CFG based on start nodes")
@@ -126,7 +139,8 @@ if __name__ == '__main__':
         rootLogger = setLogPath("graphcleaner.log")
         myGraph = graph.Graph(rootLogger)
         rootLogger.info("Creating CFG...")
-        myGraph.createGraphFromInput(options.cfginput, options.separator)
+        if ( not options.ccfg ):
+            myGraph.createGraphFromInput(options.cfginput, options.separator)
 
         if ( options.cleancfg ):
             keepList = list()
@@ -178,6 +192,12 @@ if __name__ == '__main__':
             outputFile.close()
             cfgFile.close()
 
+        elif ( options.ccfg ):
+            myGraph.createConditionalControlFlowGraph(options.cfginput)
+            #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+            allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
+            rootLogger.info("allPaths: %s", allPaths)
+            #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.fpanalysis ):
             myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
         elif ( options.fpanalysisnew ):

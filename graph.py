@@ -12,6 +12,8 @@ class Graph():
     DEFAULT = "orange"    #default (direct/indirect/conditional)
     CONDITIONAL = "yellow"  #conditional
     DIRECT = "blue"   #direct
+    INDIRECT = "red"   #indirect
+    EXT = "purple"   #external
     
     def __init__(self, logger):
         self.logger = logger
@@ -59,6 +61,11 @@ class Graph():
             self.nodeColor[nodeName] = self.INITIAL
         self.allNodes.add(nodeName)
 
+    def addEdgeWithType(self, srcNode, dstNode, edgeType):
+        self.addEdge(srcNode, dstNode)
+        edgeId = self.edgeTupleToId[(srcNode, dstNode)]
+        self.edgeColor[edgeId] = edgeType
+
     def addEdge(self, srcNode, dstNode):
         self.allNodes.add(srcNode)
         self.allNodes.add(dstNode)
@@ -66,6 +73,7 @@ class Graph():
         currentList = self.adjGraph.get(srcNode, list())
         currentList.append(dstNode)
         self.adjGraph[srcNode] = currentList
+        #self.logger.debug("Adding edge from %s to %s", srcNode, dstNode)
 
         #Add reverse edge
         currentList = self.reverseAdjGraph.get(dstNode, list())
@@ -294,6 +302,7 @@ class Graph():
         #BUG: We have to consider ALL callers of FP before removing the edges
         #We we're previously removing all incoming edges when we identified only 
         #one caller as unreachable from start
+        #FIXED
         fpFuncToCaller = dict()
 
         fpFile = open(funcPointerFile, 'r')
@@ -330,6 +339,34 @@ class Graph():
                 self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
         #Write final graph to file
         self.dumpToFile(outputFile)
+
+    def pruneConditionalTrueEdges(self):
+        return True
+
+    def isAccessible(self, startNode, targetNode, filterList=list(), exceptList=list()):
+        results = set()
+        visitedNodes = set()
+        myStack = list()
+        myStack.append(startNode)
+        self.logger.debug("running isAccessible with startNode: %s, targetNode: %s", startNode, targetNode)
+        if ( len(self.adjGraph.get(startNode, list())) == 0 ):
+            return False
+
+        while ( len(myStack) != 0 ):
+            currentNode = myStack.pop()
+            if ( currentNode not in visitedNodes):
+                if ( currentNode == targetNode ):
+                    return True
+                self.logger.debug("Visiting node: " + currentNode)
+                visitedNodes.add(currentNode)
+                if ( ( len(filterList) == 0 and len(exceptList) == 0 ) or ( len(filterList) > 0 and currentNode in filterList) or ( len(exceptList) > 0 and currentNode not in exceptList ) ):
+                    results.add(currentNode)
+                if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
+                    for node in self.adjGraph.get(currentNode, list()):
+                        myStack.append(node)
+
+        return False
+
 
     def extractStartingNodes(self):
         self.startingNodes = list()
@@ -495,6 +532,48 @@ class Graph():
             inputLine = inputFile.readline()
         inputFile.close()
 
+    def createConditionalControlFlowGraph(self, inputFilePath, separatorMap=None):
+        #separatorMap: ["default":"->", "conditional":"-C->", "directfunc":"-F->", "indirectfunc": "-INDF->", "extfunc": "-ExtF->"]
+        #In next iterations we might add the specific config option in the -C-> edge type
+        '''
+        currently our file has the following type of lines:
+        F1|BB1->F1|BB2
+        F1|BB2-C->F1|BB3
+        F1|BB2-C->F1|BB4
+        F1|BB4->F1|BB3
+        F1|BB4-INDF->F3|BB1
+        F1|BB4-F->F4|BB1
+        F1|BB4-ExtF->strcmp
+        '''
+        #TODOs:
+        #1. read and parse file and add nodes and edges corresponding to the file
+        #2. 
+        if ( not separatorMap ):
+            separatorMap = {"DEFAULT":"->", "CONDITIONAL":"-C->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->"}
+        inputFile = open(inputFilePath, 'r')
+        inputLine = inputFile.readline()
+        while ( inputLine ):
+            inputLine = inputLine.strip()
+            if ( not inputLine.startswith("#") ):
+                for separatorName, separator in separatorMap.items():
+                    if ( separator in inputLine ):
+                        splittedInput = inputLine.split(separator)
+                        callerBB = splittedInput[0]
+                        calleeBB = splittedInput[1]
+                        if ( separatorName == "CONDITIONAL" ):
+                            if ( "true" in calleeBB or "then" in calleeBB ):
+                                self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
+                                #self.logger.warning("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                            else:
+                                self.addEdgeWithType(callerBB, calleeBB, separatorName + "-FALSE")
+                        else:
+                            self.addEdgeWithType(callerBB, calleeBB, separatorName)
+            inputLine = inputFile.readline()
+        inputFile.close()
+                
+        
+
+    #Deprecated
     def applyConditionalGraph(self, inputFilePath, separator):
         inputFile = open(inputFilePath, 'r')
         inputLine = inputFile.readline()
@@ -585,9 +664,9 @@ class Graph():
             return
         visitedNodes[startNode] = True
         currentNodeList = self.adjGraph.get(startNode, list())
-#        self.logger.debug("%s->", startNode)
+        self.logger.debug("%s->", startNode)
         for node in currentNodeList:
-#            self.logger.debug("      %s", node)
+            self.logger.debug("      %s", node)
             node = node.strip()
             if ( not visitedNodes[node] and node != endNode ):
                 self.printPath(node, endNode, newPath, visitedNodes, limitedPaths, allPaths)
@@ -603,7 +682,7 @@ class Graph():
                     print ( newPath + "->" + node )
                     allPaths.add(newPath + "->" + node)
 
-        visitedNodes[startNode] = False
+#        visitedNodes[startNode] = False
 
     def toDotCfg(self, outputPath, nodes=None):
         dotFileStr = "digraph \"Call Graph\" {    label=\"Call Graph\"; \n"
