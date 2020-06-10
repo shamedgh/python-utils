@@ -24,8 +24,8 @@ def isValidOpts(opts):
     if options.cleancfg and (not options.cfginput or not options.separator or not options.input):
         parser.error("All options -c, -i and -s should be provided.")
         return False
-    elif options.ccfg and (not options.startfunc or not options.targetfunc):
-        parser.error("All options -c, --startfunc and --targetfunc should be provided.")
+    elif options.ccfg and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
+        parser.error("All options -c, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
         return False
     elif (options.fpanalysis or options.fpanalysisnew) and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
         parser.error("All options --funcname, --output, --directgraphfile, --funcpointerfile should be provided.")
@@ -88,6 +88,12 @@ if __name__ == '__main__':
 
     parser.add_option("", "--targetfunc", dest="targetfunc", default=None, nargs=1,
                       help="Target function")
+
+    parser.add_option("", "--targetfuncfile", dest="targetfuncfile", default=None, nargs=1,
+                      help="Target function file path")
+
+    parser.add_option("", "--printpaths", dest="printpaths", action="store_true", default=False,
+                      help="Enable printing all paths")
 
     ### Kernel CFG Cleaner Options ###
     parser.add_option("", "--cleancfg", dest="cleancfg", action="store_true", default=False,
@@ -195,8 +201,26 @@ if __name__ == '__main__':
         elif ( options.ccfg ):
             myGraph.createConditionalControlFlowGraph(options.cfginput)
             #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
-            allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
-            rootLogger.info("allPaths: %s", allPaths)
+            if ( options.targetfunc ):
+                if ( options.printpaths ):
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
+                    rootLogger.info("allPaths: %s", allPaths)
+                else:
+                    isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+                    rootLogger.info("isAccessible: %s", isAccessible)
+            elif ( options.targetfuncfile ):
+                targetFuncFile = open(options.targetfuncfile, 'r')
+                inputLine = targetFuncFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    if ( options.printpaths ):
+                        allPaths = myGraph.printAllPaths(options.startfunc, inputLine)
+                        rootLogger.info("allPaths to %s: %s", inputLine, allPaths)
+                    else:
+                        isAccessible = myGraph.isAccessible(options.startfunc, inputLine)
+                        rootLogger.info("%s isAccessible: %s", inputLine, isAccessible)
+                    
+                    inputLine = targetFuncFile.readline()
             #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.fpanalysis ):
             myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
