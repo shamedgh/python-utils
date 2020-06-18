@@ -14,8 +14,8 @@ def isValidOpts(opts):
     :param opts:
     :return:
     """
-    if not options.cleancfg and not options.ccfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew:
-        parser.error("At least one of the functionalities: cleancfg, fpanalysis or minremovable should be used")
+    if not options.cleancfg and not options.ccfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew and not options.isaccessible:
+        parser.error("At least one of the functionalities: ccfg, isaccessible, cleancfg, fpanalysis or minremovable should be used")
         return False
     if not options.cfginput:
         parser.error("CFG Input must be specifiec with -c")
@@ -23,6 +23,9 @@ def isValidOpts(opts):
 
     if options.cleancfg and (not options.cfginput or not options.separator or not options.input):
         parser.error("All options -c, -i and -s should be provided.")
+        return False
+    elif options.isaccessible and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
+        parser.error("qwerqwer All options -c, --isaccessible, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
         return False
     elif options.ccfg and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
         parser.error("All options -c, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
@@ -79,9 +82,15 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output", default=None, nargs=1,
                       help="Path to store cleaned CFG output")
 
+    parser.add_option("", "--isaccessible", dest="isaccessible", action="store_true", default=True, 
+                      help="Check accessibility")
+
     ### Conditional CFG Options ###
     parser.add_option("", "--ccfg", dest="ccfg", action="store_true", default=False,
                       help="Conditional control flow graph")
+
+    parser.add_option("", "--keepconditional", dest="keepconditional", action="store_true", default=False,
+                      help="Keep conditional edges?")
 
     parser.add_option("", "--startfunc", dest="startfunc", default=None, nargs=1,
                       help="Start function")
@@ -198,8 +207,30 @@ if __name__ == '__main__':
             outputFile.close()
             cfgFile.close()
 
+        elif ( options.isaccessible ):
+            if ( options.targetfunc ):
+                if ( options.printpaths ):
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
+                    rootLogger.info("allPaths: %s", allPaths)
+                else:
+                    isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+                    rootLogger.info("isAccessible: %s", isAccessible)
+            elif ( options.targetfuncfile ):
+                targetFuncFile = open(options.targetfuncfile, 'r')
+                inputLine = targetFuncFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    if ( options.printpaths ):
+                        allPaths = myGraph.printAllPaths(options.startfunc, inputLine)
+                        rootLogger.info("allPaths to %s: %s", inputLine, allPaths)
+                    else:
+                        isAccessible = myGraph.isAccessible(options.startfunc, inputLine)
+                        rootLogger.info("%s isAccessible: %s", inputLine, isAccessible)
+                    
+                    inputLine = targetFuncFile.readline()
+            #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.ccfg ):
-            myGraph.createConditionalControlFlowGraph(options.cfginput)
+            myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepconditional)
             #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
             if ( options.targetfunc ):
                 if ( options.printpaths ):

@@ -532,7 +532,7 @@ class Graph():
             inputLine = inputFile.readline()
         inputFile.close()
 
-    def createConditionalControlFlowGraph(self, inputFilePath, separatorMap=None):
+    def createConditionalControlFlowGraph(self, inputFilePath, keepConditionalEdges=True, separatorMap=None):
         #separatorMap: ["default":"->", "conditional":"-C->", "directfunc":"-F->", "indirectfunc": "-INDF->", "extfunc": "-ExtF->"]
         #In next iterations we might add the specific config option in the -C-> edge type
         '''
@@ -562,8 +562,9 @@ class Graph():
                         calleeBB = splittedInput[1]
                         if ( separatorName == "CONDITIONAL" ):
                             if ( "true" in calleeBB or "then" in calleeBB ):
-                                self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
-                                #self.logger.warning("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                                if ( keepConditionalEdges ):
+                                    self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
+                                    #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
                             else:
                                 self.addEdgeWithType(callerBB, calleeBB, separatorName + "-FALSE")
                         else:
