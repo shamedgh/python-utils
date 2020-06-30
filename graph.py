@@ -486,7 +486,7 @@ class Graph():
         return results, visitedNodes
 
     def createGraphFromInput(self, inputFilePath, separator="->"):
-        self.logger.info("Running createGraphFromInput...")
+        self.logger.debug("Running createGraphFromInput...")
         try:
             if ( os.path.isfile(inputFilePath) ):
                 inputFile = open(inputFilePath, 'r')
