@@ -350,6 +350,7 @@ class Graph():
         myStack.append(startNode)
         self.logger.debug("running isAccessible with startNode: %s, targetNode: %s", startNode, targetNode)
         if ( len(self.adjGraph.get(startNode, list())) == 0 ):
+            self.logger.debug("adjGraph for %s is empty, returning False", startNode)            
             return False
 
         while ( len(myStack) != 0 ):
@@ -485,6 +486,7 @@ class Graph():
         return results, visitedNodes
 
     def createGraphFromInput(self, inputFilePath, separator="->"):
+        self.logger.info("Running createGraphFromInput...")
         try:
             if ( os.path.isfile(inputFilePath) ):
                 inputFile = open(inputFilePath, 'r')
@@ -548,29 +550,42 @@ class Graph():
         #TODOs:
         #1. read and parse file and add nodes and edges corresponding to the file
         #2. 
+        self.logger.info("Running createConditionalControlFlowGraph function...")
         if ( not separatorMap ):
             separatorMap = {"DEFAULT":"->", "CONDITIONAL":"-C->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->"}
-        inputFile = open(inputFilePath, 'r')
-        inputLine = inputFile.readline()
-        while ( inputLine ):
-            inputLine = inputLine.strip()
-            if ( not inputLine.startswith("#") ):
-                for separatorName, separator in separatorMap.items():
-                    if ( separator in inputLine ):
-                        splittedInput = inputLine.split(separator)
-                        callerBB = splittedInput[0]
-                        calleeBB = splittedInput[1]
-                        if ( separatorName == "CONDITIONAL" ):
-                            if ( "true" in calleeBB or "then" in calleeBB ):
-                                if ( keepConditionalEdges ):
-                                    self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
-                                    #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
-                            else:
-                                self.addEdgeWithType(callerBB, calleeBB, separatorName + "-FALSE")
-                        else:
-                            self.addEdgeWithType(callerBB, calleeBB, separatorName)
-            inputLine = inputFile.readline()
-        inputFile.close()
+        try:
+            if ( os.path.isfile(inputFilePath) ):
+                inputFile = open(inputFilePath, 'r')
+                inputLine = inputFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    self.logger.debug("adding line: %s", inputLine)
+                    if ( inputLine.startswith("main") ):
+                        self.logger.debug("adding line: %s", inputLine)
+                    if ( not inputLine.startswith("#") ):
+                        for separatorName, separator in separatorMap.items():
+                            if ( separator in inputLine ):
+                                splittedInput = inputLine.split(separator)
+                                callerBB = splittedInput[0]
+                                calleeBB = splittedInput[1]
+                                if ( separatorName == "CONDITIONAL" ):
+                                    if ( "true" in calleeBB or "then" in calleeBB ):
+                                        if ( keepConditionalEdges ):
+                                            self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
+                                            #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                                    else:
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName + "-FALSE")
+                                else:
+                                    self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                    inputLine = inputFile.readline()
+                inputFile.close()
+            else:
+                self.logger.error("File doesn't exist: %s", inputFilePath)
+                return -1
+        except Exception as e:
+            self.logger.error("File doesn't exist: %s", inputFilePath)
+            return -1
+
                 
         
 
