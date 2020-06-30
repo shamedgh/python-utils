@@ -207,7 +207,7 @@ if __name__ == '__main__':
             outputFile.close()
             cfgFile.close()
 
-        elif ( options.isaccessible ):
+        elif ( options.isaccessible and not options.ccfg):
             if ( options.targetfunc ):
                 if ( options.printpaths ):
                     allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
@@ -230,6 +230,7 @@ if __name__ == '__main__':
                     inputLine = targetFuncFile.readline()
             #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.ccfg ):
+            rootLogger.info("options.ccfg enabled, running create ccfg function")
             myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepconditional)
             #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
             if ( options.targetfunc ):
