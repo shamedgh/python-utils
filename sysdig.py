@@ -28,6 +28,15 @@ class Sysdig():
             return False
         return True
 
+    def runSysdigWithDurationWithContainer(self, eventType, duration, containerName):
+        cmd = "sysdig evt.type={} and container.name={} -M {} -w {}"
+        cmd = cmd.format(eventType, containerName, duration, self.tmpFile)
+        self.proc = util.runCommandWithoutWait(cmd)
+        if ( not self.proc ):
+            self.logger.error("%s failed: %s", cmd, err)
+            return False
+        return True
+
     def stopSysdig(self):
         self.logger.debug("stopSysdig called!")
         if ( self.proc ):
