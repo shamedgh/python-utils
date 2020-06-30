@@ -357,7 +357,7 @@ class Graph():
             if ( currentNode not in visitedNodes):
                 if ( currentNode == targetNode ):
                     return True
-                self.logger.debug("Visiting node: " + currentNode)
+                #self.logger.debug("Visiting node: " + currentNode)
                 visitedNodes.add(currentNode)
                 if ( ( len(filterList) == 0 and len(exceptList) == 0 ) or ( len(filterList) > 0 and currentNode in filterList) or ( len(exceptList) > 0 and currentNode not in exceptList ) ):
                     results.add(currentNode)
@@ -392,7 +392,7 @@ class Graph():
         while ( len(myStack) != 0 ):
             currentNode = myStack.pop()
             if ( currentNode not in visitedNodes):
-                self.logger.debug("Visiting node: " + currentNode)
+                #self.logger.debug("Visiting node: " + currentNode)
                 visitedNodes.add(currentNode)
                 if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
                     for node in self.adjGraph.get(currentNode, list()):
