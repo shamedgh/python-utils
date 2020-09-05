@@ -131,7 +131,7 @@ if __name__ == '__main__':
             i += 1
 
         myGraph.createGraphFromInput(options.cfginput, options.separator)
-        allPaths = myGraph.printAllPaths("ngx_worker_process_cycle", "ngx_resolver_send_query")
+        #allPaths = myGraph.printAllPaths("ngx_worker_process_cycle", "ngx_resolver_send_query")
 
         if ( options.funcfile ):
             funcFile = open(options.funcfile, 'r')

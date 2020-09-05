@@ -228,7 +228,7 @@ class Graph():
     For now we won't to keep the code which generated the paper results intact
     '''
     def pruneAllFunctionPointersNotAccessibleFromChild(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
-        indirectOnlyFunctions = self.extractIndirectOnlyFunctions(directCfgFile, separator)
+        indirectFunctions = self.extractIndirectFunctions(directCfgFile, separator)
         fpFuncToCaller = dict()
 
         fpFile = open(funcPointerFile, 'r')
@@ -248,7 +248,7 @@ class Graph():
 
             fpLine = fpFile.readline()
 
-        for fpFunc in indirectOnlyFunctions:
+        for fpFunc in indirectFunctions:
 #        for fpFunc, callerSet in fpFuncToCaller.items():
             callerSet = fpFuncToCaller.get(fpFunc, set())
             tmpClone = self.deepCopy()
@@ -268,7 +268,7 @@ class Graph():
         #Write final graph to file
         self.dumpToFile(outputFile)
 
-    def extractIndirectOnlyFunctions(self, directCfgFile, separator):
+    def extractIndirectFunctions(self, directCfgFile, separator):
         self.applyDirectGraph(directCfgFile, separator)
         indirectFunctions = set()
         
@@ -277,8 +277,7 @@ class Graph():
             for caller in callers:
                 if self.getEdgeType(caller, node) == self.DIRECT:
                     directCallerSet.add(caller)
-                    break
-            if ( len(directCallerSet) == 0 ):
+            if ( len(directCallerSet) != len(set(callers)) ):
                 indirectFunctions.add(node)
         return indirectFunctions
 
@@ -534,14 +533,87 @@ class Graph():
             inputLine = inputFile.readline()
         inputFile.close()
 
-    def createConditionalControlFlowGraph(self, inputFilePath, keepConditionalEdges=True, separatorMap=None):
+    def convertCcfgToCallGraph(self, startNode="main|0"):
+        callGraph = Graph(self.logger)
+
+        addedEdges = set()
+        #visitedFunctions = set()
+        visitedNodes = set()
+
+        for node, nodeList in self.adjGraph.items():
+            if ( node.endswith("|0") ):
+                myStack = list()
+                myStack.append(node)
+
+                while ( len(myStack) != 0 ):
+                    currentNode = myStack.pop()
+                    srcFunc = currentNode
+                    if ( '|' in srcFunc ):
+                        srcFunc = srcFunc[:srcFunc.index('|')]
+                    if ( currentNode not in visitedNodes ):
+                        visitedNodes.add(currentNode)
+                        for dstNode in self.adjGraph.get(currentNode, list()):
+                            dstFunc = dstNode
+                            if ( '|' in dstFunc ):
+                                dstFunc = dstFunc[:dstFunc.index('|')]
+                            if ( srcFunc != dstFunc and (srcFunc, dstFunc) not in addedEdges ):
+                                addedEdges.add((srcFunc, dstFunc))
+                                callGraph.addEdge(srcFunc, dstFunc)
+                            myStack.append(dstNode)
+            else:
+                self.logger.debug("Skipping %s because it doesn't end in |0", node)
+
+        #visitedNodes = set()
+        #addedEdges = set()      #This should be handled in the addEdge function (not changing now, due to unknown effects on other code repos
+        #myStack = list()
+        #myStack.append(startNode)
+
+        #if ( len(self.adjGraph.get(startNode, list())) == 0 ):
+        #    return callGraph 
+
+        #while ( len(myStack) != 0 ):
+        #    currentNode = myStack.pop()
+        #    srcFunc = currentNode
+        #    if ( '|' in srcFunc ):
+        #        srcFunc = srcFunc[:srcFunc.index('|')]
+        #    if ( currentNode not in visitedNodes):
+        #        #self.logger.debug("Visiting node: " + currentNode)
+        #        visitedNodes.add(currentNode)
+        #        for node in self.adjGraph.get(currentNode, list()):
+        #            #self.logger.debug("Adding node: " + node)                    
+        #            dstFunc = node
+        #            if ( '|' in dstFunc ):
+        #                dstFunc = dstFunc[:dstFunc.index('|')]
+        #            if ( srcFunc != dstFunc and (srcFunc, dstFunc) not in addedEdges ):
+        #                addedEdges.add((srcFunc, dstFunc))
+        #                callGraph.addEdge(srcFunc, dstFunc)
+        #            myStack.append(node)
+
+        ##return visitedNodes
+
+
+        ##for srcNode, nodeList in self.adjGraph.items():
+        ##    srcFunc = srcNode
+        ##    if ( '|' in srcFunc ):
+        ##        srcFunc = srcFunc[:srcFunc.index('|')]
+        ##    for dstNode in nodeList:
+        ##        dstFunc = dstNode
+        ##        if ( '|' in dstFunc ):
+        ##            dstFunc = dstFunc[:dstFunc.index('|')]
+        ##        if ( srcFunc != dstFunc ):
+        ##            callGraph.addEdge(srcFunc, dstFunc)
+        return callGraph
+
+
+
+    def createConditionalControlFlowGraph(self, inputFilePath, keepAllConditionalEdges=True, separatorMap=None, enabledConditionSet=set(), disabledConditionSet=set(), removeIndirectEdges=False):
         #separatorMap: ["default":"->", "conditional":"-C->", "directfunc":"-F->", "indirectfunc": "-INDF->", "extfunc": "-ExtF->"]
         #In next iterations we might add the specific config option in the -C-> edge type
         '''
         currently our file has the following type of lines:
         F1|BB1->F1|BB2
-        F1|BB2-C->F1|BB3
-        F1|BB2-C->F1|BB4
+        F1|BB2-C-T->F1|BB3
+        F1|BB2-C-F->F1|BB4
         F1|BB4->F1|BB3
         F1|BB4-INDF->F3|BB1
         F1|BB4-F->F4|BB1
@@ -552,31 +624,42 @@ class Graph():
         #2. 
         self.logger.info("Running createConditionalControlFlowGraph function...")
         if ( not separatorMap ):
-            separatorMap = {"DEFAULT":"->", "CONDITIONAL":"-C->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->"}
+            separatorMap = {"CONDITIONAL-TRUE":"-C-T->", "CONDITIONAL-FALSE":"-C-F->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->", "DEFAULT":"->"}
         try:
             if ( os.path.isfile(inputFilePath) ):
                 inputFile = open(inputFilePath, 'r')
                 inputLine = inputFile.readline()
                 while ( inputLine ):
                     inputLine = inputLine.strip()
-                    self.logger.debug("adding line: %s", inputLine)
-                    if ( inputLine.startswith("main") ):
-                        self.logger.debug("adding line: %s", inputLine)
+                    #self.logger.debug("adding line: %s", inputLine)
+                    #if ( inputLine.startswith("main") ):
+                    #    self.logger.debug("adding line: %s", inputLine)
                     if ( not inputLine.startswith("#") ):
+                        separatorCount = 0
                         for separatorName, separator in separatorMap.items():
                             if ( separator in inputLine ):
                                 splittedInput = inputLine.split(separator)
                                 callerBB = splittedInput[0]
                                 calleeBB = splittedInput[1]
-                                if ( separatorName == "CONDITIONAL" ):
-                                    if ( "true" in calleeBB or "then" in calleeBB ):
-                                        if ( keepConditionalEdges ):
-                                            self.addEdgeWithType(callerBB, calleeBB, separatorName + "-TRUE")
-                                            #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
-                                    else:
-                                        self.addEdgeWithType(callerBB, calleeBB, separatorName + "-FALSE")
+                                if ( removeIndirectEdges and separatorName == "INDIRECT" ):
+                                    self.logger.debug("Not adding INDIRECT edge: %s", inputLine)
+                                    break                           
+                                elif ( separatorName == "CONDITIONAL-TRUE" ):
+                                    if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                        if ( callerBB.startswith("ssl_rand_seed") ):
+                                            self.logger.info("adding line: %s", inputLine)
+                                        #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                                    else:#if ( inputLine.startswith("ap_run_mpm") ):
+                                        self.logger.info("Not adding edge: %s", inputLine)
+                                    break
                                 else:
                                     self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    break
+                            else:
+                                separatorCount += 1
+                    if ( separatorCount >= 6 ):
+                        self.logger.error("Skipping line which doesn't have any separators. Is this expected? %s", inputLine)
                     inputLine = inputFile.readline()
                 inputFile.close()
             else:
@@ -698,7 +781,7 @@ class Graph():
                     print ( newPath + "->" + node )
                     allPaths.add(newPath + "->" + node)
 
-#        visitedNodes[startNode] = False
+        #visitedNodes[startNode] = False
 
     def toDotCfg(self, outputPath, nodes=None):
         dotFileStr = "digraph \"Call Graph\" {    label=\"Call Graph\"; \n"

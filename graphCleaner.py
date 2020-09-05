@@ -27,8 +27,8 @@ def isValidOpts(opts):
     elif options.isaccessible and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
         parser.error("qwerqwer All options -c, --isaccessible, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
         return False
-    elif options.ccfg and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
-        parser.error("All options -c, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
+    elif (options.ccfg and ( not options.startfunc or (not options.targetfunc and not options.targetfuncfile)) and ( not options.converttocg )):
+        parser.error("When ccfg is chosen either --startfunc and either --targetfunc or --targetfuncfile should be provided or --converttocg.")
         return False
     elif (options.fpanalysis or options.fpanalysisnew) and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
         parser.error("All options --funcname, --output, --directgraphfile, --funcpointerfile should be provided.")
@@ -82,15 +82,21 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output", default=None, nargs=1,
                       help="Path to store cleaned CFG output")
 
-    parser.add_option("", "--isaccessible", dest="isaccessible", action="store_true", default=True, 
+    parser.add_option("", "--isaccessible", dest="isaccessible", action="store_true", default=False, 
                       help="Check accessibility")
 
     ### Conditional CFG Options ###
     parser.add_option("", "--ccfg", dest="ccfg", action="store_true", default=False,
                       help="Conditional control flow graph")
 
-    parser.add_option("", "--keepconditional", dest="keepconditional", action="store_true", default=False,
-                      help="Keep conditional edges?")
+    parser.add_option("", "--keepallconditional", dest="keepallconditional", action="store_true", default=False,
+                      help="Keep all conditional edges?")
+
+    parser.add_option("", "--enabledconditions", dest="enabledconditions", default=None, nargs=1, 
+                      help="Enabled conditions")
+
+    parser.add_option("", "--removeindirectedges", dest="removeindirectedges", action="store_true", default=False, 
+                      help="Remove indirect call edges")
 
     parser.add_option("", "--startfunc", dest="startfunc", default=None, nargs=1,
                       help="Start function")
@@ -103,6 +109,9 @@ if __name__ == '__main__':
 
     parser.add_option("", "--printpaths", dest="printpaths", action="store_true", default=False,
                       help="Enable printing all paths")
+
+    parser.add_option("", "--converttocg", dest="converttocg", default=None, nargs=1,
+                      help="Convert to call graph and write to file")
 
     ### Kernel CFG Cleaner Options ###
     parser.add_option("", "--cleancfg", dest="cleancfg", action="store_true", default=False,
@@ -210,7 +219,7 @@ if __name__ == '__main__':
         elif ( options.isaccessible and not options.ccfg):
             if ( options.targetfunc ):
                 if ( options.printpaths ):
-                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc, False)
                     rootLogger.info("allPaths: %s", allPaths)
                 else:
                     isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
@@ -231,11 +240,30 @@ if __name__ == '__main__':
             #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.ccfg ):
             rootLogger.info("options.ccfg enabled, running create ccfg function")
-            myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepconditional)
+            enabledConditionSet = set()
+            disabledConditionSet = set()
+            if ( options.enabledconditions ):
+                conditionFile = open(options.enabledconditions, 'r')
+                inputLine = conditionFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    if ( inputLine.endswith("-C:ISENABLED") ):
+                        inputLine = inputLine.replace("-C:ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C:ISDISABLED") ):
+                        inputLine = inputLine.replace("-C:ISDISABLED", "")
+                        disabledConditionSet.add(inputLine)
+                    inputLine = conditionFile.readline()
+                
+            myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepallconditional, None, enabledConditionSet, disabledConditionSet, options.removeindirectedges)
             #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
-            if ( options.targetfunc ):
+            if ( options.converttocg ):
+                rootLogger.info("Converting CCFG to call graph and writing to: %s", options.converttocg)
+                callGraph = myGraph.convertCcfgToCallGraph()
+                callGraph.dumpToFile(options.converttocg)
+            elif ( options.targetfunc ):
                 if ( options.printpaths ):
-                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc)
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc, False)
                     rootLogger.info("allPaths: %s", allPaths)
                 else:
                     isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
