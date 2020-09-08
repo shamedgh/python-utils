@@ -136,7 +136,7 @@ if __name__ == '__main__':
                       help="CFG with functions assigned as function pointers")
 
     parser.add_option("-f", "--funcname", dest="funcname", default=None, nargs=1,
-                      help="Function name")
+                      help="Function name(s)")
 
     ### Configuration-Guarded Edge Identification ###
     parser.add_option("", "--minremovable", dest="minremovable", action="store_true", default=False,

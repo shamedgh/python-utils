@@ -226,10 +226,22 @@ class Graph():
     After we reach a conclusion on the correctness of applying this to the main function we can merge these 
     two funtions.
     For now we won't to keep the code which generated the paper results intact
+
+    #BUG: If the function address taken extraction code has a bug (which it does as of 9/5/20) this function 
+    #will remove functions which have their address taken, but we just haven't identified them
+    #example: httpd: setup_threads_runtime->ap_unixd_accept
+    #is not extracted by our LLVM pass, if we use the function below we will delete all incoming edges to ap_unixd_accept
+    #while it is used, the previous function (luckily used in the submitted paper) doesn't have this bug
     '''
-    def pruneAllFunctionPointersNotAccessibleFromChild(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+    def pruneAllFunctionPointersNotAccessibleFromChild(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile):
         indirectFunctions = self.extractIndirectFunctions(directCfgFile, separator)
         fpFuncToCaller = dict()
+
+        startNodeSet = set()
+        if ( "," in startNodes ):
+            startNodeSet = set(startNodes.split(","))
+        else:
+            startNodeSet.add(startNodes)
 
         fpFile = open(funcPointerFile, 'r')
         fpLine = fpFile.readline()
@@ -257,8 +269,9 @@ class Graph():
             tmpClone.deleteOutboundEdges(fpFunc)
             reachableSet = set()
             for caller in callerSet:
-                #Check if caller is reachable from start node
-                reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+                for startNode in startNodeSet:
+                    #Check if caller is reachable from each start node
+                    reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
             callerReachable = (len(reachableSet) > 0)
             self.logger.debug("caller: %s isReachable from child/worker? %s", caller, callerReachable)
@@ -281,7 +294,7 @@ class Graph():
                 indirectFunctions.add(node)
         return indirectFunctions
 
-    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
 
@@ -304,6 +317,12 @@ class Graph():
         #FIXED
         fpFuncToCaller = dict()
 
+        startNodeSet = set()
+        if ( "," in startNodes ):
+            startNodeSet = set(startNodes.split(","))
+        else:
+            startNodeSet.add(startNodes)
+
         fpFile = open(funcPointerFile, 'r')
         fpLine = fpFile.readline()
         while ( fpLine ):
@@ -323,13 +342,16 @@ class Graph():
 
         for fpFunc, callerSet in fpFuncToCaller.items():
             tmpClone = self.deepCopy()
+            self.logger.debug("Starting analysis for fpFunc: %s", fpFunc)
             
             #Temporarily remove outbound edges from B
+            self.logger.debug("Temporarily removing outbound edges from: %s", fpFunc)
             tmpClone.deleteOutboundEdges(fpFunc)
             reachableSet = set()
             for caller in callerSet:
-                #Check if caller is reachable from start node
-                reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+                for startNode in startNodeSet:
+                    #Check if caller is reachable from each start node
+                    reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
             callerReachable = (len(reachableSet) > 0)
             self.logger.debug("caller: %s isReachable? %s", caller, callerReachable)
@@ -408,6 +430,9 @@ class Graph():
         visitedNodes = set()
         myStack = list()
         myStack.append(nodeName)
+
+        if ( nodeName in filterList ):
+            results.add(nodeName)
 
         if ( len(self.adjGraph.get(nodeName, list())) == 0 ):
             return results
