@@ -245,7 +245,7 @@ def readLibrariesWithLdd(elfPath):
             except:
                 logging.critical("Parsing Error with %s outcome!" % ("ldd"))
                 logging.critical("Trying to extract libraries with objdump!")
-                loadings = readLibrariesWithObjdump(elfPath)
+                # loadings = readLibrariesWithObjdump(elfPath)
 
     return loadings
 

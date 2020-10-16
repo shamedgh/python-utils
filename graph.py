@@ -504,7 +504,7 @@ class Graph():
                         currentNode = currentNode.replace("(","")
                         currentNode = currentNode.replace(")","")
                         currentNode = currentNode.strip()
-                        if ( not currentNode.startswith("%") ):
+                        if ( not currentNode.startswith("%") and currentNode != "" ):
                             results.add(int(currentNode))
 
         return results, visitedNodes
