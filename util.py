@@ -732,6 +732,20 @@ def getAvailableSystemMemoryInMB():
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
 
+def convertLibrarySetToDict(libraryPathSet):
+    libraryDict = dict()
+    for libPath in libraryPathSet:
+        libName = convertLibraryPathToName(libPath)
+        libraryDict[libName] = libPath
+    return libraryDict
+
+def convertLibraryPathToName(libraryPath):
+    if ( libraryPath.endswith(".so") ):
+        libraryPath = libraryPath.replace(".so", "")
+    if ( "/" in libraryPath ):
+        libraryPath = libraryPath[libraryPath.rindex("/"):]
+    return libraryPath
+
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
     getBBLsFromIDA()
