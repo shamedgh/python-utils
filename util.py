@@ -740,10 +740,10 @@ def convertLibrarySetToDict(libraryPathSet):
     return libraryDict
 
 def convertLibraryPathToName(libraryPath):
-    if ( libraryPath.endswith(".so") ):
-        libraryPath = libraryPath.replace(".so", "")
+    #if ( libraryPath.endswith(".so") ):
+    #    libraryPath = libraryPath.replace(".so", "")
     if ( "/" in libraryPath ):
-        libraryPath = libraryPath[libraryPath.rindex("/"):]
+        libraryPath = libraryPath[libraryPath.rindex("/")+1:]
     return libraryPath
 
 if __name__ == '__main__':

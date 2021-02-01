@@ -51,7 +51,7 @@ class BinaryAnalysis:
             returncode, out, err = util.runCommand(cmd)
             if ( returncode != 0 ):
                 self.logger.error("Couldn't create dump file for: %s with err: %s", self.binaryPath, dumpFilePath)
-                return None
+                return (None, -1, -1)
             #Find direct syscalls and arguments
             #Specify how many were found successfully and how many were not
             syscallSet, successCount, failedCount = self.parseObjdump(dumpFilePath)
@@ -61,7 +61,7 @@ class BinaryAnalysis:
             return (syscallSet, successCount, failedCount)
         else:
             self.logger.error("binary path doesn't exist: %s", self.binaryPath)
-            return (None, -1)
+            return (None, -1, -1)
 
     
     def sanitizeFnName(self, instr):
