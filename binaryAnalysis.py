@@ -84,6 +84,7 @@ class BinaryAnalysis:
         try:
             intnum = int(number, 16)
         except ValueError:
+            self.logger.debug("can't convert: %s", token)
             pass
         return intnum
     
@@ -97,6 +98,7 @@ class BinaryAnalysis:
                 src = srcdst[0]
                 dst = srcdst[1]
                 if dst == "%rax" or dst == "%eax" or dst == "%rcx" or dst == "%ecx" or dst == "%edi" or dst == "%rdi":
+                    #self.logger.debug("src: %s", src)
                     num = self.decimalify(src)
              
         return num
@@ -127,7 +129,7 @@ class BinaryAnalysis:
             body = FnNameBodyMap[fnName]
             for i in range(len(body)):
                 line = body[i]
-                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e8" in line) :
+                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e8" in line) or ("syscall" in line and "e9" in line):
                     # Check the past three lines for the value of the rax register
                     tmpI = i-1
                     num = self.extractNum(body[tmpI])
