@@ -249,6 +249,47 @@ def readLibrariesWithLdd(elfPath):
 
     return loadings
 
+def readLibrariesWithLddWithFullname(elfPath):
+    """
+    Read the output from ldd command, which are all libraries employed by the given elf file
+    $ ldd /bin/ls
+        linux-vdso.so.1 =>  (0x00007ffda6fb7000)
+        libselinux.so.1 => /lib/x86_64-linux-gnu/libselinux.so.1 (0x00007f74f0e15000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f74f0a4b000)
+        libpcre.so.3 => /lib/x86_64-linux-gnu/libpcre.so.3 (0x00007f74f07db000)
+        libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f74f05d7000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f74f1037000)
+        libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f74f03ba000)
+    :param elfPath:
+    :return:
+    """
+    cmd = "ldd " + elfPath
+    (returncode, out, err) = runCommand(cmd)
+    if ( returncode != 0 ):
+        print("ldd error: " + err)
+        return dict()
+
+    #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
+    #stdout = proc.communicate()[0]
+    loadings = dict()
+
+    # Read all imports and exports per each library
+    for lib in out.split('\n\t'):
+        # Exclude a virtual dynamically linked shared object(VDSO) and a dynamic loader(DL)
+        if 'linux-vdso' not in lib and 'ld-linux' not in lib:
+            try:
+                libname, libpath = lib.split(" => ")
+                libname = libname.strip()#.split(".")[0]         # Library name only w/o version
+                libpath = libpath.split("(")[0].strip() # Discard the address
+                loadings[libname] = libpath
+
+            except:
+                logging.critical("Parsing Error with %s outcome!" % ("ldd"))
+                logging.critical("Trying to extract libraries with objdump!")
+                # loadings = readLibrariesWithObjdump(elfPath)
+
+    return loadings
+
 def readLibrariesWithObjdump(elfPath):
     """
     Read the output from objdump -p temp/nginx | grep NEEDED command, which are all libraries employed by the given elf file
@@ -528,6 +569,22 @@ def extractImportedFunctions(fileName, logger, libcOnly=False):
         functionList.append(line.strip())
     return functionList
 
+def extractExportedFunctionsWithNm(filePath, logger):
+    logger.debug("extracting exported functions for %s", filePath)
+    startNodes = list()
+    cmd = "nm -D --defined-only " + filePath + " | awk '{print $3}'"
+    returncode, out, err = runCommand(cmd)
+    if ( returncode != 0 ):
+        logger.error("Error running nm command for: %s: error: %s", filePath, err)
+        return startNodes
+    lines = out.split("\n")
+    for line in lines:
+        line = line.strip()
+        if ( line != "" ):
+            startNodes.append(line)
+    return startNodes
+
+
 def extractExportedFunctions(fileName, logger):
     cmd = "objdump -T " + fileName + " | grep \"DF\" | grep -v \"UND\" | awk '{print $6,$7}'"
     if ( logger ):
@@ -731,6 +788,20 @@ def getAvailableSystemMemoryInMB():
 
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
+
+def convertLibrarySetToDict(libraryPathSet):
+    libraryDict = dict()
+    for libPath in libraryPathSet:
+        libName = convertLibraryPathToName(libPath)
+        libraryDict[libName] = libPath
+    return libraryDict
+
+def convertLibraryPathToName(libraryPath):
+    #if ( libraryPath.endswith(".so") ):
+    #    libraryPath = libraryPath.replace(".so", "")
+    if ( "/" in libraryPath ):
+        libraryPath = libraryPath[libraryPath.rindex("/")+1:]
+    return libraryPath
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
