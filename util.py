@@ -802,11 +802,11 @@ def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outp
     while ( inputLine ):
         splittedInput = inputLine.split(separator)
         if ( len(splittedInput) == 2 ):
-            caller = splittedInput[0]
-            callee = splittedInput[1]
+            caller = splittedInput[0].strip()
+            callee = splittedInput[1].strip()
             if ( caller not in exceptList ):
                 caller = prefix + "." + caller
-            if ( callee not in exceptList ):
+            if ( callee not in exceptList and not callee.startswith("syscall") ):
                 callee = prefix + "." + callee
 
             outputFile.write(caller + separator + callee + "\n")
