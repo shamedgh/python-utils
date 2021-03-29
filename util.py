@@ -801,15 +801,16 @@ def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outp
     inputLine = inputFile.readline()
     while ( inputLine ):
         splittedInput = inputLine.split(separator)
-        caller = splittedInput[0]
-        callee = splittedInput[1]
-        if ( caller not in exceptList ):
-            caller = prefix + "." + caller
-        if ( callee not in exceptList ):
-            callee = prefix + "." + callee
+        if ( len(splittedInput) == 2 ):
+            caller = splittedInput[0]
+            callee = splittedInput[1]
+            if ( caller not in exceptList ):
+                caller = prefix + "." + caller
+            if ( callee not in exceptList ):
+                callee = prefix + "." + callee
 
-        outputFile.write(caller + separator + callee + "\n")
-        outputFile.flush()
+            outputFile.write(caller + separator + callee + "\n")
+            outputFile.flush()
 
         inputLine = inputFile.readline()
 
