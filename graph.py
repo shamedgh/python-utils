@@ -45,6 +45,13 @@ class Graph():
         copyGraph.allNodes = copy.deepcopy(self.allNodes)
         return copyGraph
 
+    def getAllLeafNodes(self):
+        leafNodes = set()
+        for node, outCount in self.nodeOutputs.items():
+            if ( outCount == 0 ):
+                leafNodes.add(node)
+        return leafNodes
+
     def getAllNodes(self):
         return self.allNodes
 
