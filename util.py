@@ -789,6 +789,35 @@ def getAvailableSystemMemoryInMB():
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
 
+def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/"):
+    callgraphName = callgraphPath
+    if ( "/" in callgraphPath ):
+        callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
+    outputPath = outputPath + callgraphName
+
+    outputFile = open(outputPath, 'w')
+
+    inputFile = open(callgraphPath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedInput = inputLine.split(separator)
+        caller = splittedInput[0]
+        callee = splittedInput[1]
+        if ( caller not in exceptList ):
+            caller = prefix + "." + caller
+        if ( callee not in exceptList ):
+            callee = prefix + "." + callee
+
+        outputFile.write(caller + separator + callee + "\n")
+        outputFile.flush()
+
+        inputLine = inputFile.readline()
+
+    inputFile.close()
+    outputFile.close()
+
+    return outputPath
+
 def convertLibrarySetToDict(libraryPathSet):
     libraryDict = dict()
     for libPath in libraryPathSet:
