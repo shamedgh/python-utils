@@ -523,7 +523,7 @@ class Graph():
                     for node in self.adjGraph.get(currentNode, list()):
                         myStack.append(node)
                 else:
-                    if ( currentNode.strip().startswith("syscall") ):
+                    if ( currentNode.strip().startswith("syscall") and "(" in currentNode ):
                         #self.logger.debug("getSyscallFromStartNode: currentNode: %s", currentNode)
                         currentNode = currentNode.replace("syscall","")
                         currentNode = currentNode.replace("(","")
