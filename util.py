@@ -529,9 +529,12 @@ def readDictFromFile(filePath):
     myFile.close()
     return myDict
 
-def runCommand(cmd):
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #print("running cmd: " + cmd)
+def runCommand(cmd, cwd=None):
+    if ( cwd ):
+        proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
     outStr = str(out.decode("utf-8"))
