@@ -792,7 +792,7 @@ def getAvailableSystemMemoryInMB():
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
 
-def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/"):
+def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/tmp-callgraphs/"):
     callgraphName = callgraphPath
     if ( "/" in callgraphPath ):
         callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
