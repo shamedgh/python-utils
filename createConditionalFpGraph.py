@@ -86,12 +86,25 @@ if __name__ == '__main__':
                 inputLine = conditionFile.readline()
                 while ( inputLine ):
                     inputLine = inputLine.strip()
-                    if ( inputLine.endswith("-C:ISENABLED") ):
-                        inputLine = inputLine.replace("-C:ISENABLED", "")
+                    if ( inputLine.endswith("-C-T:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
                         enabledConditionSet.add(inputLine)
-                    elif ( inputLine.endswith("-C:ISDISABLED") ):
-                        inputLine = inputLine.replace("-C:ISDISABLED", "")
+                    elif ( inputLine.endswith("-C-T:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
                         disabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
+                        disabledConditionSet.add(inputLine)
+
+                    #if ( inputLine.endswith("-C:ISENABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISENABLED", "")
+                    #    enabledConditionSet.add(inputLine)
+                    #elif ( inputLine.endswith("-C:ISDISABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISDISABLED", "")
+                    #    disabledConditionSet.add(inputLine)
                     inputLine = conditionFile.readline()
             removeIndirectEdges = False
             intraproceduralOnly = True 

@@ -531,6 +531,8 @@ class Graph():
                         currentNode = currentNode.strip()
                         if ( not currentNode.startswith("%") and currentNode != '' ):
                             results.add(int(currentNode))
+                        else:
+                            self.logger.warning("getSyscallFromStartNodeWithVisitedNodes skipping currentNode: %s", currentNode)
 
         return results, visitedNodes
 
@@ -697,8 +699,13 @@ class Graph():
                                 elif ( removeIndirectEdges and separatorName == "INDIRECT" ):
                                     self.logger.debug("Not adding INDIRECT edge: %s", inputLine)
                                     break                           
-                                elif ( separatorName == "CONDITIONAL-TRUE" ):
-                                    if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                elif ( separatorName == "CONDITIONAL-TRUE" or separatorName == "CONDITIONAL-FALSE"):
+                                    #if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                    # Changed enabled/disabled conditions to be able to remove both True edge and False edge
+                                    separatorSuffix = separatorMap[separatorName]
+                                    separatorSuffix = separatorSuffix.replace("->", "")
+                                    callerBBWithSep = callerBB + separatorSuffix
+                                    if ( keepAllConditionalEdges or callerBBWithSep in enabledConditionSet or not callerBBWithSep in disabledConditionSet ):
                                         self.addEdgeWithType(callerBB, calleeBB, separatorName)
                                         if ( callerBB.startswith("ssl_rand_seed") ):
                                             self.logger.info("adding line: %s", inputLine)
