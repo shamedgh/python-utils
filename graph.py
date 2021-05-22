@@ -45,6 +45,13 @@ class Graph():
         copyGraph.allNodes = copy.deepcopy(self.allNodes)
         return copyGraph
 
+    def getAllLeafNodes(self):
+        leafNodes = set()
+        for node, outCount in self.nodeOutputs.items():
+            if ( outCount == 0 ):
+                leafNodes.add(node)
+        return leafNodes
+
     def getAllNodes(self):
         return self.allNodes
 
@@ -294,7 +301,7 @@ class Graph():
                 indirectFunctions.add(node)
         return indirectFunctions
 
-    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile):
+    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile, funcPointerFileWoConditions=None):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
 
@@ -340,6 +347,23 @@ class Graph():
 
             fpLine = fpFile.readline()
 
+        fpFile.close()
+
+        if ( funcPointerFileWoConditions ):
+            fpFile = open(funcPointerFileWoConditions, 'r')
+            fpLine = fpFile.readline()
+            while ( fpLine ):
+                if ( "->" in fpLine ):
+                    splittedLine = fpLine.split("->")
+                    caller = splittedLine[0].strip()
+                    fpFunc = splittedLine[1].strip()
+                    self.logger.debug("caller: %s, fp: %s", caller, fpFunc)
+
+                    if ( len(fpFuncToCaller.get(fpFunc, set())) == 0 ):
+                        self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+                fpLine = fpFile.readline()
+            fpFile.close()
+
         for fpFunc, callerSet in fpFuncToCaller.items():
             tmpClone = self.deepCopy()
             self.logger.debug("Starting analysis for fpFunc: %s", fpFunc)
@@ -358,6 +382,7 @@ class Graph():
             #If caller isn't reachable, permanently remove all indirect calls to B
             if ( not callerReachable ):
                 self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+
         #Write final graph to file
         self.dumpToFile(outputFile)
 
@@ -379,7 +404,7 @@ class Graph():
             if ( currentNode not in visitedNodes):
                 if ( currentNode == targetNode ):
                     return True
-                #self.logger.debug("Visiting node: " + currentNode)
+                self.logger.debug("Visiting node: " + currentNode)
                 visitedNodes.add(currentNode)
                 if ( ( len(filterList) == 0 and len(exceptList) == 0 ) or ( len(filterList) > 0 and currentNode in filterList) or ( len(exceptList) > 0 and currentNode not in exceptList ) ):
                     results.add(currentNode)
@@ -498,7 +523,7 @@ class Graph():
                     for node in self.adjGraph.get(currentNode, list()):
                         myStack.append(node)
                 else:
-                    if ( currentNode.strip().startswith("syscall") ):
+                    if ( currentNode.strip().startswith("syscall") and "(" in currentNode ):
                         #self.logger.debug("getSyscallFromStartNode: currentNode: %s", currentNode)
                         currentNode = currentNode.replace("syscall","")
                         currentNode = currentNode.replace("(","")
@@ -506,6 +531,8 @@ class Graph():
                         currentNode = currentNode.strip()
                         if ( not currentNode.startswith("%") and currentNode != '' ):
                             results.add(int(currentNode))
+                        else:
+                            self.logger.warning("getSyscallFromStartNodeWithVisitedNodes skipping currentNode: %s", currentNode)
 
         return results, visitedNodes
 
@@ -631,7 +658,7 @@ class Graph():
 
 
 
-    def createConditionalControlFlowGraph(self, inputFilePath, keepAllConditionalEdges=True, separatorMap=None, enabledConditionSet=set(), disabledConditionSet=set(), removeIndirectEdges=False):
+    def createConditionalControlFlowGraph(self, inputFilePath, keepAllConditionalEdges=True, separatorMap=None, enabledConditionSet=set(), disabledConditionSet=set(), removeIndirectEdges=False, intraproceduralOnly=False):
         #separatorMap: ["default":"->", "conditional":"-C->", "directfunc":"-F->", "indirectfunc": "-INDF->", "extfunc": "-ExtF->"]
         #In next iterations we might add the specific config option in the -C-> edge type
         '''
@@ -666,15 +693,23 @@ class Graph():
                                 splittedInput = inputLine.split(separator)
                                 callerBB = splittedInput[0]
                                 calleeBB = splittedInput[1]
-                                if ( removeIndirectEdges and separatorName == "INDIRECT" ):
+                                if ( intraproceduralOnly and (separatorName == "INDIRECT" or separatorName == "DIRECT" or separatorName == "EXT" ) ):
+                                    self.logger.debug("Not adding INDIRECT, DIRECT or EXT edge because intraproceduralOnly is TRUE: %s", inputLine)
+                                    break                           
+                                elif ( removeIndirectEdges and separatorName == "INDIRECT" ):
                                     self.logger.debug("Not adding INDIRECT edge: %s", inputLine)
                                     break                           
-                                elif ( separatorName == "CONDITIONAL-TRUE" ):
-                                    if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                elif ( separatorName == "CONDITIONAL-TRUE" or separatorName == "CONDITIONAL-FALSE"):
+                                    #if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                    # Changed enabled/disabled conditions to be able to remove both True edge and False edge
+                                    separatorSuffix = separatorMap[separatorName]
+                                    separatorSuffix = separatorSuffix.replace("->", "")
+                                    callerBBWithSep = callerBB + separatorSuffix
+                                    if ( keepAllConditionalEdges or callerBBWithSep in enabledConditionSet or not callerBBWithSep in disabledConditionSet ):
                                         self.addEdgeWithType(callerBB, calleeBB, separatorName)
                                         if ( callerBB.startswith("ssl_rand_seed") ):
                                             self.logger.info("adding line: %s", inputLine)
-                                        #self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                                        self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
                                     else:#if ( inputLine.startswith("ap_run_mpm") ):
                                         self.logger.info("Not adding edge: %s", inputLine)
                                     break

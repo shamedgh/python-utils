@@ -135,6 +135,9 @@ if __name__ == '__main__':
     parser.add_option("", "--funcpointerfile", dest="funcpointerfile", default=None, nargs=1,
                       help="CFG with functions assigned as function pointers")
 
+    parser.add_option("", "--removedfuncpointerfile", dest="removedfuncpointerfile", default=None, nargs=1,
+                      help="Function assignments removed based on conditional statements")
+
     parser.add_option("-f", "--funcname", dest="funcname", default=None, nargs=1,
                       help="Function name(s)")
 
@@ -247,11 +250,23 @@ if __name__ == '__main__':
                 inputLine = conditionFile.readline()
                 while ( inputLine ):
                     inputLine = inputLine.strip()
-                    if ( inputLine.endswith("-C:ISENABLED") ):
-                        inputLine = inputLine.replace("-C:ISENABLED", "")
+                    #if ( inputLine.endswith("-C:ISENABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISENABLED", "")
+                    #    enabledConditionSet.add(inputLine)
+                    #elif ( inputLine.endswith("-C:ISDISABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISDISABLED", "")
+                    #    disabledConditionSet.add(inputLine)
+                    if ( inputLine.endswith("-C-T:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
                         enabledConditionSet.add(inputLine)
-                    elif ( inputLine.endswith("-C:ISDISABLED") ):
-                        inputLine = inputLine.replace("-C:ISDISABLED", "")
+                    elif ( inputLine.endswith("-C-T:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
+                        disabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
                         disabledConditionSet.add(inputLine)
                     inputLine = conditionFile.readline()
                 
@@ -283,7 +298,7 @@ if __name__ == '__main__':
                     inputLine = targetFuncFile.readline()
             #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.fpanalysis ):
-            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
+            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output, options.removedfuncpointerfile)
         elif ( options.fpanalysisnew ):
             myGraph.pruneAllFunctionPointersNotAccessibleFromChild(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
         elif ( options.minremovable ):

@@ -529,9 +529,12 @@ def readDictFromFile(filePath):
     myFile.close()
     return myDict
 
-def runCommand(cmd):
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #print("running cmd: " + cmd)
+def runCommand(cmd, cwd=None):
+    if ( cwd ):
+        proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
     outStr = str(out.decode("utf-8"))
@@ -799,6 +802,36 @@ def getAvailableSystemMemoryInMB():
 
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
+
+def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/tmp-callgraphs/"):
+    callgraphName = callgraphPath
+    if ( "/" in callgraphPath ):
+        callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
+    outputPath = outputPath + callgraphName
+
+    outputFile = open(outputPath, 'w')
+
+    inputFile = open(callgraphPath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedInput = inputLine.split(separator)
+        if ( len(splittedInput) == 2 ):
+            caller = splittedInput[0].strip()
+            callee = splittedInput[1].strip()
+            if ( caller not in exceptList ):
+                caller = prefix + "." + caller
+            if ( callee not in exceptList and not callee.startswith("syscall") ):
+                callee = prefix + "." + callee
+
+            outputFile.write(caller + separator + callee + "\n")
+            outputFile.flush()
+
+        inputLine = inputFile.readline()
+
+    inputFile.close()
+    outputFile.close()
+
+    return outputPath
 
 def convertLibrarySetToDict(libraryPathSet):
     libraryDict = dict()
