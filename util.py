@@ -544,6 +544,17 @@ def runCommandWithoutWait(cmd):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return proc
 
+def runCommandWithPid(cmd):
+    proc = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #print("running cmd: " + cmd)
+    #proc.wait()
+    (out, err) = proc.communicate()
+    outStr = str(out.decode("utf-8"))
+    errStr = str(err.decode("utf-8"))
+    #print("finished running cmd: " + cmd)
+    return (proc.returncode, outStr, errStr, proc.pid)
+    #return (proc.returncode, out, err)
+
 def extractImportedFunctionsFromLibc(fileName, logger):
     return extractImportedFunctions(fileName, logger, True)
 
@@ -802,6 +813,20 @@ def convertLibraryPathToName(libraryPath):
     if ( "/" in libraryPath ):
         libraryPath = libraryPath[libraryPath.rindex("/")+1:]
     return libraryPath
+
+#create captoid.txt by doing: cat /usr/include/linux/capability.h | grep "define CAP" > captoid.txt
+#and remove the extra couple of lines at the end 
+def createCapIdToStr(filePath="captoid.txt"):
+    capIdToName = dict()
+    inputFile = open(filePath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedLine = inputLine.split()
+        capName = splittedLine[1]
+        capId = int(splittedLine[2])
+        capIdToName[capId] = capName.lower()
+        inputLine = inputFile.readline()
+    return capIdToName
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
