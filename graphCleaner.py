@@ -138,6 +138,9 @@ if __name__ == '__main__':
     parser.add_option("", "--removedfuncpointerfile", dest="removedfuncpointerfile", default=None, nargs=1,
                       help="Function assignments removed based on conditional statements")
 
+    parser.add_option("", "--runtimeexecutedfunctionsfile", dest="runtimeexecutedfunctionsfile", default=None, nargs=1,
+                      help="File containing functions which were executed at runtime")
+
     parser.add_option("-f", "--funcname", dest="funcname", default=None, nargs=1,
                       help="Function name(s)")
 
@@ -298,7 +301,7 @@ if __name__ == '__main__':
                     inputLine = targetFuncFile.readline()
             #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.fpanalysis ):
-            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output, options.removedfuncpointerfile)
+            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output, options.removedfuncpointerfile, options.runtimeexecutedfunctionsfile)
         elif ( options.fpanalysisnew ):
             myGraph.pruneAllFunctionPointersNotAccessibleFromChild(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
         elif ( options.minremovable ):

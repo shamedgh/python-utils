@@ -301,7 +301,7 @@ class Graph():
                 indirectFunctions.add(node)
         return indirectFunctions
 
-    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile, funcPointerFileWoConditions=None):
+    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile, funcPointerFileWoConditions=None, runtimeExecutedFunctionFilePath=None):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
 
@@ -364,6 +364,16 @@ class Graph():
                 fpLine = fpFile.readline()
             fpFile.close()
 
+        #Added to keep track of functions executed at runtime -- for enhanced runtime FP analysis
+        runtimeExecutedFunctions = set()
+        if ( runtimeExecutedFunctionFilePath ):
+            runtimeExecutedFunctionFile = open(runtimeExecutedFunctionFilePath, 'r')
+            executedFuncLine = runtimeExecutedFunctionFile.readline()
+            while ( executedFuncLine ):
+                runtimeExecutedFunctions.add(executedFuncLine.strip())
+                executedFuncLine = runtimeExecutedFunctionFile.readline()
+            runtimeExecutedFunctionFile.close()
+
         for fpFunc, callerSet in fpFuncToCaller.items():
             tmpClone = self.deepCopy()
             self.logger.debug("Starting analysis for fpFunc: %s", fpFunc)
@@ -372,13 +382,20 @@ class Graph():
             self.logger.debug("Temporarily removing outbound edges from: %s", fpFunc)
             tmpClone.deleteOutboundEdges(fpFunc)
             reachableSet = set()
+            callerReachable = False
             for caller in callerSet:
+                if ( caller in runtimeExecutedFunctions ):      #If the caller is executed at runtime, all fp allocations are reachable
+                    self.logger.debug("caller: %s is in runtimeExecutedFunctions, not removing FP allocation", caller)
+                    callerReachable = True
+                    break
                 for startNode in startNodeSet:
                     #Check if caller is reachable from each start node
                     reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
-            callerReachable = (len(reachableSet) > 0)
+            if ( not callerReachable ):
+                callerReachable = (len(reachableSet) > 0)
             self.logger.debug("caller: %s isReachable? %s", caller, callerReachable)
+
             #If caller isn't reachable, permanently remove all indirect calls to B
             if ( not callerReachable ):
                 self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)

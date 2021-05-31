@@ -47,9 +47,10 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
     if isValidOpts(options):
-        rootLogger = setLogPath("graph.log")
+        rootLogger = setLogPath("binaryanalysis.log")
         tmpSet = set()
         myBinary = binaryAnalysis.BinaryAnalysis(options.input, rootLogger)
-        a, b, c = myBinary.extractDirectSyscalls()
-        tmpSet.update(a)
-        rootLogger.info("a: %s, b: %d, c: %d", a, b, c)
+        #a, b, c = myBinary.extractDirectSyscalls()
+        #tmpSet.update(a)
+        #rootLogger.info("a: %s, b: %d, c: %d", a, b, c)
+        rootLogger.info("size of func: main: %d", myBinary.getTotalSize({"main"}))

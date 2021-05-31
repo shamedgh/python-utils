@@ -8,6 +8,7 @@ class BinaryAnalysis:
     """
     def __init__(self, binaryPath, logger):
         self.binaryPath = binaryPath
+        self.funcSizeMap = dict()
         self.logger = logger
 
     def extractIndirectSyscalls(self, libcGraphObj):
@@ -166,3 +167,32 @@ class BinaryAnalysis:
         #    for syscall in FnSysCallMap[fnName]:
         #        syscallSet.add(syscall)
         return (syscallSet, successCount, failCount)
+
+    def getFuncSize(self, funcName):
+        if ( self.funcSizeMap.get(funcName, None) ):
+            return self.funcSizeMap[funcName]
+        else:
+            self.logger.error("BinaryAnalysis: size not found for function: %s", funcName)
+            return 0
+
+    def getTotalSize(self, visitedFuncs):
+        cmd = "nm -AP {}"
+        finalCmd = cmd.format(self.binaryPath)
+        returncode, out, err = util.runCommand(finalCmd)
+        if ( returncode != 0 ):
+            self.logger.error("Running cmd: %s - %s", finalCmd, err)
+            self.logger.error("Exiting...")
+            sys.exit(-1)
+        for line in out.splitlines():
+            lineStr = line.strip()#.decode("utf-8")
+            tokens = lineStr.split()
+            if len (tokens) > 4:
+                funcName = tokens[1]
+                funcSize = tokens[4]
+                self.funcSizeMap[funcName] = int(funcSize, 16)
+
+        total = 0
+        for funcName in visitedFuncs:
+            total += self.getFuncSize(funcName)
+
+        return total
