@@ -249,6 +249,21 @@ def readLibrariesWithLdd(elfPath):
 
     return loadings
 
+def copyAllDependentLibraries(elfPath, dstPath, logger=None):
+    libToPath = readLibrariesWithLdd(elfPath)
+    copyCmd = "cp {} {}"
+    for libName, libPath in libToPath.items():
+        if ( os.path.exists(libPath) ):
+            finalCopyCmd = copyCmd.format(libPath, dstPath)
+            returncode, out, err = runCommand(finalCopyCmd)
+            if ( returncode != 0 ):
+                if ( logger ):
+                    logger.error("Error trying to copy library: %s - %s", libPath, err)
+                else:
+                    print("Error trying to copy library: " + libPath + " - " + err)
+    return
+                
+
 def readLibrariesWithLddWithFullname(elfPath):
     """
     Read the output from ldd command, which are all libraries employed by the given elf file
