@@ -9,8 +9,17 @@ class BitcodeAnalysis:
     def __init__(self, bitcodePath, logger):
         self.bitcodePath = bitcodePath
         self.llvmCmd = "/home/hamed/svf/svf.new.improved/SVF/Debug-Build/bin/spa -bb-count {}"
+        self.llcCmd = "/home/hamed/svf/svf.new.improved/llvm-10.0.0.obj/bin/llc -O0 -filetype=obj {} -o {}"
         self.funcToBbDict = dict()
         self.logger = logger
+
+    def convertToObj(self, outputPath):
+        llcFinalCmd = self.llcCmd.format(self.bitcodePath, outputPath)
+        returncode, err, out = util.runCommand(llcFinalCmd)
+        if ( returncode != 0 ):
+            self.logger.error("llc command %s failed: %s", llcFinalCmd, error)
+            return -1
+        return 0
 
     def extractFuncToBbCount(self):
         llvmCmdFull = self.llvmCmd.format(self.bitcodePath)

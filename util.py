@@ -443,6 +443,15 @@ def countRefToNops(sectionData, fixupInfo):
     print [hex(x) for x in sorted(reduce(lambda x,y: x+y, BBLs))]
     print sum(reduce(lambda x,y: x+y, sizes))'''
 
+def getPkgNameFromLibPath(libPath, logger):
+    cmd = "dpkg -S {}"
+    finalCmd = cmd.format(libPath)
+    returncode, out, err = runCommand(finalCmd)
+    if ( returncode != 0 ):
+        logger.error("dpkg cmd: %s failed - err: %s", finalCmd, err)
+        return None
+    return getLibNameWoArchFromDpkgOutput(out)
+
 def getLibNameFromDpkgOutput(dpkgOutput):
     """
     Read file with each library mapped to it's source (this should be provided by the user in the following format:
@@ -456,6 +465,21 @@ def getLibNameFromDpkgOutput(dpkgOutput):
         libname, path = outline.split(": ")
     else:
         libname = ""
+    return libname
+
+def getLibNameWoArchFromDpkgOutput(dpkgOutput):
+    """
+    Read file with each library mapped to it's source (this should be provided by the user in the following format:
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6.0.0
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6
+    :return:
+    """
+    outline = dpkgOutput.splitlines()[0]
+    print (outline)
+    if ( ":" in outline ):
+        libname = outline.split(":")[0]
+    else:
+        libname = None
     return libname
 
 def readLibrarySourcePathFromFile(libMapFilePath, ignoreList):

@@ -53,4 +53,5 @@ if __name__ == '__main__':
         #a, b, c = myBinary.extractDirectSyscalls()
         #tmpSet.update(a)
         #rootLogger.info("a: %s, b: %d, c: %d", a, b, c)
-        rootLogger.info("size of func: main: %d", myBinary.getTotalSize({"main"}))
+        funcName = "inflateResetKeep"
+        rootLogger.info("size of func: %s: %d", funcName,  myBinary.getTotalSize({funcName}))
