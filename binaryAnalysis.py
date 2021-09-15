@@ -109,8 +109,23 @@ class BinaryAnalysis:
                 srcdst = split[i+1].split(",")
                 src = srcdst[0]
                 dst = srcdst[1]
-                if dst == "%rax" or dst == "%eax" or dst == "%rcx" or dst == "%ecx" or dst == "%edi" or dst == "%rdi":
-                    #self.logger.debug("src: %s", src)
+                if dst == "%rax" or dst == "%eax" or dst == "%rcx" or dst == "%ecx":
+                    self.logger.debug("src: %s", src)
+                    num = self.decimalify(src)
+             
+        return num
+    
+    def extractNumForWrapper(self, ins):
+        num = -1
+        split = ins.split()
+        for i in range(len(split)):
+            if split[i] == "mov":
+                # Next token should be src,dest
+                srcdst = split[i+1].split(",")
+                src = srcdst[0]
+                dst = srcdst[1]
+                if dst == "%edi" or dst == "%rdi":
+                    self.logger.debug("src: %s", src)
                     num = self.decimalify(src)
              
         return num
@@ -141,31 +156,27 @@ class BinaryAnalysis:
             body = FnNameBodyMap[fnName]
             for i in range(len(body)):
                 line = body[i]
-                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e8" in line) or ("syscall" in line and "e9" in line):
+                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e9" in line):
                     # Check the past three lines for the value of the rax register
                     tmpI = i-1
                     num = self.extractNum(body[tmpI])
                     while ( num == -1 and (i - tmpI) < 15 and tmpI > 0 ):
                         tmpI = tmpI - 1
                         num = self.extractNum(body[tmpI])
-                    #if num == -1:
-                    #    num = extractNum(body[i-2])
-                    #if num == -1:
-                    #    num = extractNum(body[i-3])
-                    #if num == -1:
-                    #    num = extractNum(body[i-4])
-                    #if num == -1:
-                    #    num = extractNum(body[i-5])
-                    #if num == -1:
-                    #    num = extractNum(body[i-6])
-                    #if num == -1:
-                    #    num = extractNum(body[i-7])
-                    #if num == -1:
-                    #    num = extractNum(body[i-8])
-                    #if num == -1:
-                    #    num = extractNum(body[i-9])
-                    #if num == -1:
-                    #    num = extractNum(body[i-10])
+                    if num == -1:
+                        failCount += 1
+                        self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)
+                    else:
+                        successCount += 1
+                        syscallSet.add(num)
+                        #FnSysCallMap[fnName].append(num)
+                if ("syscall" in line and "e8" in line):
+                    # Check the past three lines for the value of the rax register
+                    tmpI = i-1
+                    num = self.extractNumForWrapper(body[tmpI])
+                    while ( num == -1 and (i - tmpI) < 15 and tmpI > 0 ):
+                        tmpI = tmpI - 1
+                        num = self.extractNumForWrapper(body[tmpI])
                     if num == -1:
                         failCount += 1
                         self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)

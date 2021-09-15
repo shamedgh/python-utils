@@ -50,8 +50,8 @@ if __name__ == '__main__':
         rootLogger = setLogPath("binaryanalysis.log")
         tmpSet = set()
         myBinary = binaryAnalysis.BinaryAnalysis(options.input, rootLogger)
-        #a, b, c = myBinary.extractDirectSyscalls()
+        a, b, c = myBinary.extractDirectSyscalls()
         #tmpSet.update(a)
-        #rootLogger.info("a: %s, b: %d, c: %d", a, b, c)
-        funcName = "inflateResetKeep"
-        rootLogger.info("size of func: %s: %d", funcName,  myBinary.getTotalSize({funcName}))
+        rootLogger.info("syscallSet: %s, successCount: %d, failedCount: %d", str(a), b, c)
+        #funcName = "inflateResetKeep"
+        #rootLogger.info("size of func: %s: %d", funcName,  myBinary.getTotalSize({funcName}))
