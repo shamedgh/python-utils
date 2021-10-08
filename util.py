@@ -573,7 +573,7 @@ def runCommand(cmd, cwd=None):
         proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print("running cmd: " + cmd)
+    #print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
     outStr = str(out.decode("utf-8"))
