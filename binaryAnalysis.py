@@ -50,7 +50,7 @@ class BinaryAnalysis:
             cmd = cmd.format(self.binaryPath)
             returncode, out, err = util.runCommand(cmd)
             if ( returncode != 0 ):
-                self.logger.error("Couldn't create dump file for: %s with err: %s", self.binaryPath, dumpFilePath)
+                self.logger.debug("Couldn't create dump file for: %s with err: %s", self.binaryPath, dumpFilePath)
                 return (None, -1, -1)
             #Find direct syscalls and arguments
             #Specify how many were found successfully and how many were not
@@ -60,7 +60,7 @@ class BinaryAnalysis:
             os.unlink(dumpFilePath)
             return (syscallSet, successCount, failedCount)
         else:
-            self.logger.error("binary path doesn't exist: %s", self.binaryPath)
+            self.logger.debug("binary path doesn't exist: %s", self.binaryPath)
             return (None, -1, -1)
 
     
@@ -156,7 +156,7 @@ class BinaryAnalysis:
                     #    num = extractNum(body[i-10])
                     if num == -1:
                         failCount += 1
-                        self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)
+                        self.logger.debug("Can't reason about syscall in function: %s in line: %s", fnName, line)
                     else:
                         successCount += 1
                         syscallSet.add(num)

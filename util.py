@@ -225,7 +225,7 @@ def readLibrariesWithLdd(elfPath):
     cmd = "ldd " + elfPath
     (returncode, out, err) = runCommand(cmd)
     if ( returncode != 0 ):
-        print("ldd error: " + err)
+        #print("ldd error: " + err)
         return dict()
 
     #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
@@ -266,7 +266,7 @@ def readLibrariesWithLddWithFullname(elfPath):
     cmd = "ldd " + elfPath
     (returncode, out, err) = runCommand(cmd)
     if ( returncode != 0 ):
-        print("ldd error: " + err)
+        #print("ldd error: " + err)
         return dict()
 
     #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
