@@ -249,6 +249,21 @@ def readLibrariesWithLdd(elfPath):
 
     return loadings
 
+def copyAllDependentLibraries(elfPath, dstPath, logger=None):
+    libToPath = readLibrariesWithLdd(elfPath)
+    copyCmd = "cp {} {}"
+    for libName, libPath in libToPath.items():
+        if ( os.path.exists(libPath) ):
+            finalCopyCmd = copyCmd.format(libPath, dstPath)
+            returncode, out, err = runCommand(finalCopyCmd)
+            if ( returncode != 0 ):
+                if ( logger ):
+                    logger.error("Error trying to copy library: %s - %s", libPath, err)
+                else:
+                    print("Error trying to copy library: " + libPath + " - " + err)
+    return
+                
+
 def readLibrariesWithLddWithFullname(elfPath):
     """
     Read the output from ldd command, which are all libraries employed by the given elf file
@@ -428,6 +443,15 @@ def countRefToNops(sectionData, fixupInfo):
     print [hex(x) for x in sorted(reduce(lambda x,y: x+y, BBLs))]
     print sum(reduce(lambda x,y: x+y, sizes))'''
 
+def getPkgNameFromLibPath(libPath, logger):
+    cmd = "dpkg -S {}"
+    finalCmd = cmd.format(libPath)
+    returncode, out, err = runCommand(finalCmd)
+    if ( returncode != 0 ):
+        logger.error("dpkg cmd: %s failed - err: %s", finalCmd, err)
+        return None
+    return getLibNameWoArchFromDpkgOutput(out)
+
 def getLibNameFromDpkgOutput(dpkgOutput):
     """
     Read file with each library mapped to it's source (this should be provided by the user in the following format:
@@ -441,6 +465,21 @@ def getLibNameFromDpkgOutput(dpkgOutput):
         libname, path = outline.split(": ")
     else:
         libname = ""
+    return libname
+
+def getLibNameWoArchFromDpkgOutput(dpkgOutput):
+    """
+    Read file with each library mapped to it's source (this should be provided by the user in the following format:
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6.0.0
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6
+    :return:
+    """
+    outline = dpkgOutput.splitlines()[0]
+    print (outline)
+    if ( ":" in outline ):
+        libname = outline.split(":")[0]
+    else:
+        libname = None
     return libname
 
 def readLibrarySourcePathFromFile(libMapFilePath, ignoreList):
@@ -529,9 +568,12 @@ def readDictFromFile(filePath):
     myFile.close()
     return myDict
 
-def runCommand(cmd):
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #print("running cmd: " + cmd)
+def runCommand(cmd, cwd=None):
+    if ( cwd ):
+        proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
     outStr = str(out.decode("utf-8"))
@@ -543,6 +585,17 @@ def runCommand(cmd):
 def runCommandWithoutWait(cmd):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return proc
+
+def runCommandWithPid(cmd):
+    proc = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #print("running cmd: " + cmd)
+    #proc.wait()
+    (out, err) = proc.communicate()
+    outStr = str(out.decode("utf-8"))
+    errStr = str(err.decode("utf-8"))
+    #print("finished running cmd: " + cmd)
+    return (proc.returncode, outStr, errStr, proc.pid)
+    #return (proc.returncode, out, err)
 
 def extractImportedFunctionsFromLibc(fileName, logger):
     return extractImportedFunctions(fileName, logger, True)
@@ -789,6 +842,36 @@ def getAvailableSystemMemoryInMB():
 def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
 
+def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/tmp-callgraphs/"):
+    callgraphName = callgraphPath
+    if ( "/" in callgraphPath ):
+        callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
+    outputPath = outputPath + callgraphName
+
+    outputFile = open(outputPath, 'w')
+
+    inputFile = open(callgraphPath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedInput = inputLine.split(separator)
+        if ( len(splittedInput) == 2 ):
+            caller = splittedInput[0].strip()
+            callee = splittedInput[1].strip()
+            if ( caller not in exceptList ):
+                caller = prefix + "." + caller
+            if ( callee not in exceptList and not callee.startswith("syscall") ):
+                callee = prefix + "." + callee
+
+            outputFile.write(caller + separator + callee + "\n")
+            outputFile.flush()
+
+        inputLine = inputFile.readline()
+
+    inputFile.close()
+    outputFile.close()
+
+    return outputPath
+
 def convertLibrarySetToDict(libraryPathSet):
     libraryDict = dict()
     for libPath in libraryPathSet:
@@ -802,6 +885,20 @@ def convertLibraryPathToName(libraryPath):
     if ( "/" in libraryPath ):
         libraryPath = libraryPath[libraryPath.rindex("/")+1:]
     return libraryPath
+
+#create captoid.txt by doing: cat /usr/include/linux/capability.h | grep "define CAP" > captoid.txt
+#and remove the extra couple of lines at the end 
+def createCapIdToStr(filePath="captoid.txt"):
+    capIdToName = dict()
+    inputFile = open(filePath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedLine = inputLine.split()
+        capName = splittedLine[1]
+        capId = int(splittedLine[2])
+        capIdToName[capId] = capName.lower()
+        inputLine = inputFile.readline()
+    return capIdToName
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)

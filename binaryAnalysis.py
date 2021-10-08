@@ -1,6 +1,7 @@
 import sys
 import os
 import util
+import re
 
 class BinaryAnalysis:
     """
@@ -8,7 +9,18 @@ class BinaryAnalysis:
     """
     def __init__(self, binaryPath, logger):
         self.binaryPath = binaryPath
+        self.funcSizeMap = dict()
         self.logger = logger
+
+    def cleanName(self):
+        self.logger.debug("cleanName input: %s", self.binaryPath)
+        binName = self.binaryPath[self.binaryPath.rindex("/")+1:]
+        if ( ".so" in binName ):
+            binName = re.sub("-.*so",".so",binName)
+            binName = binName[:binName.index(".so")]
+            #libName = libName + ".so"
+        self.logger.debug("cleanName output: %s", binName)
+        return binName
 
     def extractIndirectSyscalls(self, libcGraphObj):
         syscallList = list()
@@ -97,8 +109,23 @@ class BinaryAnalysis:
                 srcdst = split[i+1].split(",")
                 src = srcdst[0]
                 dst = srcdst[1]
-                if dst == "%rax" or dst == "%eax" or dst == "%rcx" or dst == "%ecx" or dst == "%edi" or dst == "%rdi":
-                    #self.logger.debug("src: %s", src)
+                if dst == "%rax" or dst == "%eax" or dst == "%rcx" or dst == "%ecx":
+                    self.logger.debug("src: %s", src)
+                    num = self.decimalify(src)
+             
+        return num
+    
+    def extractNumForWrapper(self, ins):
+        num = -1
+        split = ins.split()
+        for i in range(len(split)):
+            if split[i] == "mov":
+                # Next token should be src,dest
+                srcdst = split[i+1].split(",")
+                src = srcdst[0]
+                dst = srcdst[1]
+                if dst == "%edi" or dst == "%rdi":
+                    self.logger.debug("src: %s", src)
                     num = self.decimalify(src)
              
         return num
@@ -129,31 +156,27 @@ class BinaryAnalysis:
             body = FnNameBodyMap[fnName]
             for i in range(len(body)):
                 line = body[i]
-                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e8" in line) or ("syscall" in line and "e9" in line):
+                if ("syscall" in line and "0f 05" in line) or ("syscall" in line and "e9" in line):
                     # Check the past three lines for the value of the rax register
                     tmpI = i-1
                     num = self.extractNum(body[tmpI])
                     while ( num == -1 and (i - tmpI) < 15 and tmpI > 0 ):
                         tmpI = tmpI - 1
                         num = self.extractNum(body[tmpI])
-                    #if num == -1:
-                    #    num = extractNum(body[i-2])
-                    #if num == -1:
-                    #    num = extractNum(body[i-3])
-                    #if num == -1:
-                    #    num = extractNum(body[i-4])
-                    #if num == -1:
-                    #    num = extractNum(body[i-5])
-                    #if num == -1:
-                    #    num = extractNum(body[i-6])
-                    #if num == -1:
-                    #    num = extractNum(body[i-7])
-                    #if num == -1:
-                    #    num = extractNum(body[i-8])
-                    #if num == -1:
-                    #    num = extractNum(body[i-9])
-                    #if num == -1:
-                    #    num = extractNum(body[i-10])
+                    if num == -1:
+                        failCount += 1
+                        self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)
+                    else:
+                        successCount += 1
+                        syscallSet.add(num)
+                        #FnSysCallMap[fnName].append(num)
+                if ("syscall" in line and "e8" in line):
+                    # Check the past three lines for the value of the rax register
+                    tmpI = i-1
+                    num = self.extractNumForWrapper(body[tmpI])
+                    while ( num == -1 and (i - tmpI) < 15 and tmpI > 0 ):
+                        tmpI = tmpI - 1
+                        num = self.extractNumForWrapper(body[tmpI])
                     if num == -1:
                         failCount += 1
                         self.logger.debug("Can't reason about syscall in function: %s in line: %s", fnName, line)
@@ -166,3 +189,118 @@ class BinaryAnalysis:
         #    for syscall in FnSysCallMap[fnName]:
         #        syscallSet.add(syscall)
         return (syscallSet, successCount, failCount)
+
+    def getFuncSize(self, funcName):
+        if ( self.funcSizeMap.get(funcName, None) ):
+            return self.funcSizeMap[funcName]
+        else:
+            self.logger.error("BinaryAnalysis(%s): size not found for function: %s", self.binaryPath, funcName)
+            return 0
+
+    def getTotalSize(self, visitedFuncs):
+        total = 0
+        if ( self.hasDebugSyms() ):
+            cmd = "nm -AP {}"
+            finalCmd = cmd.format(self.binaryPath)
+            returncode, out, err = util.runCommand(finalCmd)
+            if ( returncode != 0 ):
+                self.logger.error("Running cmd: %s - %s", finalCmd, err)
+                self.logger.error("Exiting...")
+                sys.exit(-1)
+            self.parseNmOutput(out)
+    
+        else:
+            self.logger.info("binary doesn't have debug symbols, installing packages first")
+            pkgName = self.installDebugSyms()
+            if ( pkgName ):
+                self.buildFuncToSizeMap(pkgName)
+            else:
+                self.logger.error("Skipping extracting size for library: %s", self.binaryPath)
+                return -1
+
+        for funcName in visitedFuncs:
+            total += self.getFuncSize(funcName)
+
+        return total
+
+    def parseNmOutput(self, output):
+        for line in output.splitlines():
+            lineStr = line.strip()#.decode("utf-8")
+            tokens = lineStr.split()
+            if len (tokens) > 4:
+                funcName = tokens[1]
+                funcSize = tokens[4]
+                self.funcSizeMap[funcName] = int(funcSize, 16)
+
+    def hasDebugSyms(self):
+        cmd = "nm -AP {}"
+        finalCmd = cmd.format(self.binaryPath)
+        returncode, out, err = util.runCommand(finalCmd)    #nm doesn't return correct error code when target doesn't have symbols
+        self.logger.debug("return code: %d", returncode)
+        self.logger.debug("out: %s", out)
+        self.logger.debug("err: %s", err)
+        err = err.strip()
+        if ( err.endswith("no symbols") ):
+            return False
+        else:
+            self.logger.debug("%s has debug symbols", self.binaryPath)
+        return True
+
+    def installDebugSyms(self):
+        pkgName = util.getPkgNameFromLibPath(self.binaryPath, self.logger)
+        if ( not pkgName ):
+            pkgName = self.cleanName()
+        pkgName = pkgName + "-dbg"
+        cmd = "sudo apt install {}"
+        finalCmd = cmd.format(pkgName)
+        returncode, out, err = util.runCommand(finalCmd)
+        if ( returncode != 0 ):
+            self.logger.error("Running package installation failed: %s", err)
+            self.logger.error("Failed to install debug symbols for: %s", pkgName)
+            pkgName = None
+            #sys.exit(-1)
+            #TODO fix package name from json or something?
+        return pkgName
+
+    def buildFuncToSizeMap(self, pkgName):
+        cmd = "dpkg -L {}"
+        finalCmd = cmd.format(pkgName)
+        returncode, out, err = util.runCommand(finalCmd)
+        if ( returncode != 0 ):
+            self.logger.error("Extracting files installed by package %s failed - err: %s", pkgName, err)
+            sys.exit(-1)
+
+        """
+        /.
+        /usr
+        /usr/lib
+        /usr/lib/debug
+        /usr/lib/debug/.build-id
+        /usr/lib/debug/.build-id/d8
+        /usr/lib/debug/.build-id/d8/c3aa54d81c80bfc5134b8339a669190fd52517.debug
+        /usr/lib/debug/.build-id/ef
+        /usr/lib/debug/.build-id/ef/3e006dfe3132a41d4d4dc0e407d6ea658e11c4.debug
+        /usr/lib/debug/.build-id/ef/8c6e4915db70788108eee460d867a7436f9a18.debug
+        /usr/share
+        /usr/share/doc
+        /usr/share/doc/zlib1g-dbg
+        /usr/share/doc/zlib1g-dbg/copyright
+        /usr/share/doc/zlib1g-dbg/changelog.Debian.gz
+        """
+
+        dbgFilePaths = set()
+        for outLine in out.splitlines():
+            outLine = outLine.strip()
+            if ( outLine.endswith(".debug") ):
+                self.logger.debug("adding debug file: %s", outLine)
+                dbgFilePaths.add(outLine)
+
+        nmCmd = "nm --debug-syms {} -AP {}"
+        for dbgFilePath in dbgFilePaths:
+            nmFinalCmd = nmCmd.format(dbgFilePath, self.binaryPath)
+            returncode, out, err = util.runCommand(nmFinalCmd)
+            if ( returncode != 0 ):
+                self.logger.error("Error running nm with debug symbols cmd: %s - err: %s", nmFinalCmd, err)
+                self.logger.error("Skipping file %s", dbgFilePath)
+                continue
+            self.parseNmOutput(out)
