@@ -75,9 +75,11 @@ class Sysdig(MonitoringTool):
         try:
             cmd = ["sudo", "sysdig", "-r", self.tmpFile, "evt.type=" + eventType]
             if ( cgroupId != "" ):
-                cmd = ["sudo", "sysdig", "-r", self.tmpFile, "evt.type=" + eventType, "and", "thread.cgroups", "contains", cgroupId ]
+                cmd = ["sudo", "sysdig", "-r", self.tmpFile, "evt.type=" + eventType, 
+                       "and", "thread.cgroups", "contains", cgroupId ]
             elif ( containerName != "" ):
-                cmd = ["sudo", "sysdig", "-r", self.tmpFile, "evt.type=" + eventType, "and", "container.name=" + containerName]
+                cmd = ["sudo", "sysdig", "-r", self.tmpFile, "evt.type=" + eventType, 
+                       "and", "container.name=" + containerName]
             result = None
             for loopCounter in range(3):
                 result = subprocess.run(cmd, capture_output=True)
@@ -98,6 +100,9 @@ class Sysdig(MonitoringTool):
                     psName = psName.replace("[", "")
                     if ( not psName.strip().startswith("/proc/")):
                         psNames.add(psName)
+                        scriptNames = self.extractArgs(psName, splittedLine[9])
+                        if ( scriptNames and len(scriptNames) != 0 ):
+                            psNames.update(scriptNames)
                 elif ( len(splittedLine) == 8 and splittedLine[7].startswith("filename=")):
                     psName = splittedLine[7].strip()[9:]
                     psName = psName.replace("[", "")
@@ -108,6 +113,33 @@ class Sysdig(MonitoringTool):
             return None
         return psNames
 
+    def extractArgs(self, psName, args):
+        shellNames = ["/bin/sh", "/bin/ash", "/bin/bash", "/bin/zsh",
+                      "sh", "bash", "ash", "zsh"]
+        if ( psName not in shellNames ):
+            return None
+        scriptNames = set()
+        #args=/docker-entrypoint.sh.nginx.-g.daemon off;.
+        args = args.strip()
+        args = args.replace("args=", "")
+        ''' 
+        sysdig aggregates the args into a single string using a dot separator 
+        we will consider all the strings possible as paths to scripts 
+        e.g., args=/docker-entrypoint.sh.nginx.-g.daemon off;.
+        /docker-entrypoint
+        /docker-entrypoint.sh
+        /docker-entrypoint.sh.nginx
+        ...
+        '''
+        splitByDot = args.split('.')
+        if ( len(splitByDot) == 0 ):
+            return set(args)
+        currScript = splitByDot[0]
+        scriptNames.add(currScript)
+        for token in splitByDot[1:-1]:
+            currScript = currScript + "." + token
+            scriptNames.add(currScript)
+        return scriptNames
 
 
 import logging
