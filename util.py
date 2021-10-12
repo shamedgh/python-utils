@@ -65,8 +65,8 @@ class ProgressBar(object):
 
 # http://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
 class ColorFormatter(logging.Formatter):
-    FORMAT = ("%(asctime)s [%(levelname)-18s] %(message)s "
-              "($BOLD%(filename)s$RESET:%(lineno)d)")
+    FORMAT = ("[$PHASECOLOR%(phase)-4s$RESET] %(message)s ")
+             # "($BOLD%(filename)s$RESET:%(lineno)d)")
 
     BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
@@ -81,10 +81,17 @@ class ColorFormatter(logging.Formatter):
       'CRITICAL': RED,
       'ERROR': RED
     }
+    PHASECOLORS = {
+      'INIT': RED,
+      'MONITORING': YELLOW,
+      'ANALYSIS': BLUE,
+      'VALIDATION': GREEN
+    }
 
     def formatter_msg(self, msg, use_color = True):
         if use_color:
-            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            #msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$PHASECOLOR", self.BOLD_SEQ)
         else:
             msg = msg.replace("$RESET", "").replace("$BOLD", "")
         return msg
