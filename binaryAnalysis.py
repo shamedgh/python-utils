@@ -165,7 +165,7 @@ class BinaryAnalysis:
                         num = self.extractNum(body[tmpI])
                     if num == -1:
                         failCount += 1
-                        self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)
+                        #self.logger.error("Can't reason about syscall in function: %s in line: %s", fnName, line)
                     else:
                         successCount += 1
                         syscallSet.add(num)
