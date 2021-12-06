@@ -65,8 +65,8 @@ class ProgressBar(object):
 
 # http://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
 class ColorFormatter(logging.Formatter):
-    FORMAT = ("%(asctime)s [%(levelname)-18s] %(message)s "
-              "($BOLD%(filename)s$RESET:%(lineno)d)")
+    FORMAT = ("[$PHASECOLOR%(phase)-4s$RESET] %(message)s ")
+             # "($BOLD%(filename)s$RESET:%(lineno)d)")
 
     BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
@@ -81,10 +81,17 @@ class ColorFormatter(logging.Formatter):
       'CRITICAL': RED,
       'ERROR': RED
     }
+    PHASECOLORS = {
+      'INIT': RED,
+      'MONITORING': YELLOW,
+      'ANALYSIS': BLUE,
+      'VALIDATION': GREEN
+    }
 
     def formatter_msg(self, msg, use_color = True):
         if use_color:
-            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            #msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$PHASECOLOR", self.BOLD_SEQ)
         else:
             msg = msg.replace("$RESET", "").replace("$BOLD", "")
         return msg
@@ -225,7 +232,7 @@ def readLibrariesWithLdd(elfPath):
     cmd = "ldd " + elfPath
     (returncode, out, err) = runCommand(cmd)
     if ( returncode != 0 ):
-        print("ldd error: " + err)
+        #print("ldd error: " + err)
         return dict()
 
     #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
@@ -284,7 +291,7 @@ def readLibrariesWithLddWithFullname(elfPath):
     cmd = "ldd " + elfPath
     (returncode, out, err) = runCommand(cmd)
     if ( returncode != 0 ):
-        print("ldd error: " + err)
+        #print("ldd error: " + err)
         return dict()
 
     #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
@@ -576,7 +583,7 @@ def runCommand(cmd, cwd=None):
         proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print("running cmd: " + cmd)
+    #print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
     outStr = str(out.decode("utf-8"))
