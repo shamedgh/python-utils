@@ -239,6 +239,7 @@ def readLibrariesWithLdd(elfPath):
             try:
                 libname, libpath = lib.split(" => ")
                 libname = libname.split(".")[0]         # Library name only w/o version
+                libname = libname.split("-")[0]         # Library name only w/o version
                 libpath = libpath.split("(")[0].strip() # Discard the address
                 loadings[libname] = libpath
 
@@ -251,6 +252,8 @@ def readLibrariesWithLdd(elfPath):
 
 def copyAllDependentLibraries(elfPath, dstPath, logger=None):
     libToPath = readLibrariesWithLdd(elfPath)
+    if ( len(libToPath) == 0 ):
+        return -1
     copyCmd = "cp {} {}"
     for libName, libPath in libToPath.items():
         if ( os.path.exists(libPath) ):
@@ -261,7 +264,7 @@ def copyAllDependentLibraries(elfPath, dstPath, logger=None):
                     logger.error("Error trying to copy library: %s - %s", libPath, err)
                 else:
                     print("Error trying to copy library: " + libPath + " - " + err)
-    return
+    return 0
                 
 
 def readLibrariesWithLddWithFullname(elfPath):
@@ -843,6 +846,13 @@ def getTotalSystemMemoryInMB():
     return getTotalSystemMemory()/(1000000)
 
 def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/tmp-callgraphs/"):
+    mkdirCmd = "mkdir -p {}"
+    mkdirFinalCmd = mkdirCmd.format(outputPath)
+    returncode, out, err = runCommand(mkdirFinalCmd)
+    if ( returncode != 0 ):
+        print("error creating folder: %s - %s", outputPath, err)
+        sys.exit(-1)
+
     callgraphName = callgraphPath
     if ( "/" in callgraphPath ):
         callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
