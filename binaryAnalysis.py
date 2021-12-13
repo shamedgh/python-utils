@@ -194,7 +194,7 @@ class BinaryAnalysis:
         if ( self.funcSizeMap.get(funcName, None) ):
             return self.funcSizeMap[funcName]
         else:
-            self.logger.error("BinaryAnalysis(%s): size not found for function: %s", self.binaryPath, funcName)
+            #self.logger.error("BinaryAnalysis(%s): size not found for function: %s", self.binaryPath, funcName)
             return 0
 
     def getTotalSize(self, visitedFuncs):
