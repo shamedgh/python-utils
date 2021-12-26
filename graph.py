@@ -693,7 +693,7 @@ class Graph():
         #2. 
         self.logger.info("Running createConditionalControlFlowGraph function...")
         if ( not separatorMap ):
-            separatorMap = {"CONDITIONAL-TRUE":"-C-T->", "CONDITIONAL-FALSE":"-C-F->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->", "DEFAULT":"->"}
+            separatorMap = {"CONDITIONAL-TRUE":"-C-T->", "CONDITIONAL-FALSE":"-C-F->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->", "SWITCH-CASE":"-S-T->", "DEFAULT":"->"}
         try:
             if ( os.path.isfile(inputFilePath) ):
                 inputFile = open(inputFilePath, 'r')
@@ -730,12 +730,26 @@ class Graph():
                                     else:#if ( inputLine.startswith("ap_run_mpm") ):
                                         self.logger.info("Not adding edge: %s", inputLine)
                                     break
+                                elif ( separatorName == "SWITCH-CASE" ):
+                                    if ( keepAllConditionalEdges ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    # if callerBB-S-T is in enabled add
+                                    callerBBWithSep = callerBB + "-S-T"
+                                    callerBBWithSepCallee = callerBB + "-S-T->" + calleeBB
+                                    if ( callerBBWithSep in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    # if callerBB-S-T->calleeBB in enabled add this
+                                    elif ( callerBBWithSepCallee in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    else:
+                                        self.logger.info("Not adding edge: %s", inputLine)
+                                    break
                                 else:
                                     self.addEdgeWithType(callerBB, calleeBB, separatorName)
                                     break
                             else:
                                 separatorCount += 1
-                    if ( separatorCount >= 6 ):
+                    if ( separatorCount >= 7 ):
                         self.logger.error("Skipping line which doesn't have any separators. Is this expected? %s", inputLine)
                     inputLine = inputFile.readline()
                 inputFile.close()

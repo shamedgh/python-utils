@@ -271,6 +271,12 @@ if __name__ == '__main__':
                     elif ( inputLine.endswith("-C-F:ISDISABLED") ):
                         inputLine = inputLine.replace(":ISDISABLED", "")
                         disabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-S-T:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( "-S-T->" in inputLine and inputLine.endswith(":ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
                     inputLine = conditionFile.readline()
                 
             myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepallconditional, None, enabledConditionSet, disabledConditionSet, options.removeindirectedges)
