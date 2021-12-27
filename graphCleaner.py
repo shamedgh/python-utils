@@ -277,6 +277,16 @@ if __name__ == '__main__':
                     elif ( "-S-T->" in inputLine and inputLine.endswith(":ISENABLED") ):
                         inputLine = inputLine.replace(":ISENABLED", "")
                         enabledConditionSet.add(inputLine)
+                        # when a switch-case is not config-related we need to enable
+                        # all cases, but how can we know that it's not config based?
+                        # in the if/else case no C-T or C-F in the enabled file meant
+                        # that it's not config-based
+                        # here for any case to know that no other case has been enabled
+                        # either we will add the following to the cases
+                        # now each case can check for this general enabled instance to
+                        # to figure out whether or not any other case was enabled in this file
+                        caller = inputLine.split("-S-T->")[0]
+                        enabledConditionSet.add(caller+"-S-T->")    # generalize so that we know at least one case is enabled
                     inputLine = conditionFile.readline()
                 
             myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepallconditional, None, enabledConditionSet, disabledConditionSet, options.removeindirectedges)

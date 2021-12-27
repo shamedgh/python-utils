@@ -736,10 +736,13 @@ class Graph():
                                     # if callerBB-S-T is in enabled add
                                     callerBBWithSep = callerBB + "-S-T"
                                     callerBBWithSepCallee = callerBB + "-S-T->" + calleeBB
+                                    callerBBWithSepGeneral = callerBB + "-S-T->"    # is this even a config-based switch?
                                     if ( callerBBWithSep in enabledConditionSet ):
                                         self.addEdgeWithType(callerBB, calleeBB, separatorName)
                                     # if callerBB-S-T->calleeBB in enabled add this
                                     elif ( callerBBWithSepCallee in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    elif ( callerBBWithSepGeneral not in enabledConditionSet ):
                                         self.addEdgeWithType(callerBB, calleeBB, separatorName)
                                     else:
                                         self.logger.info("Not adding edge: %s", inputLine)
