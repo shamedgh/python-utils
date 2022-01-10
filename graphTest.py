@@ -105,6 +105,9 @@ if __name__ == '__main__':
     parser.add_option("", "--minremovemaxdepth", dest="minremovemaxdepth", default=None, nargs=1,
                       help="Max depth for minimum removable edge")
 
+    parser.add_option("", "--allleaves", dest="allleaves", action="store_true", default=False,
+                      help="Extract all leaves")
+
     parser.add_option("-d", "--debug", dest="debug", action="store_true", default=False,
                       help="Debug enabled/disabled")
 
@@ -131,7 +134,7 @@ if __name__ == '__main__':
             i += 1
 
         myGraph.createGraphFromInput(options.cfginput, options.separator)
-        allPaths = myGraph.printAllPaths("ngx_worker_process_cycle", "ngx_resolver_send_query")
+        #allPaths = myGraph.printAllPaths("ngx_worker_process_cycle", "ngx_resolver_send_query")
 
         if ( options.funcfile ):
             funcFile = open(options.funcfile, 'r')
@@ -165,17 +168,19 @@ if __name__ == '__main__':
                 pruneInaccessibleFunctionPointers(myGraph, options.funcname, options.funcpointerfile, options.directgraphfile, "->", options.outputfile, rootLogger)
             else:
                 if ( options.funcname ):
-                    leaves = myGraph.getLeavesFromStartNode(options.funcname, syscallList, list())
-                    syscallNames = set()
-                    for leaf in leaves:
-                        if ( leaf.startswith("syscall") ):
-                            leaf = leaf.replace("syscall", "")
-                            leaf = leaf.replace("(", "")
-                            leaf = leaf.replace(")", "")
-                            syscallNum = int(leaf.strip())
-                            syscallNames.add(syscallMap.get(syscallNum, ""))
-                    print (syscallNames)
-                    #leaves = myGraph.getLeavesFromStartNode(options.funcname, list(), list())
+                    if ( options.allleaves ):
+                        leaves = myGraph.getLeavesFromStartNode(options.funcname, list(), list())
+                    else:
+                        leaves = myGraph.getLeavesFromStartNode(options.funcname, syscallList, list())
+                        syscallNames = set()
+                        for leaf in leaves:
+                            if ( leaf.startswith("syscall") ):
+                                leaf = leaf.replace("syscall", "")
+                                leaf = leaf.replace("(", "")
+                                leaf = leaf.replace(")", "")
+                                syscallNum = int(leaf.strip())
+                                syscallNames.add(syscallMap.get(syscallNum, ""))
+                        print (syscallNames)
                 else:
                     leaves = myGraph.getLeavesFromStartNode("read", syscallList, list())
 #            print (leaves)

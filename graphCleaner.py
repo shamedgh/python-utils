@@ -14,8 +14,8 @@ def isValidOpts(opts):
     :param opts:
     :return:
     """
-    if not options.cleancfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew:
-        parser.error("At least one of the functionalities: cleancfg, fpanalysis or minremovable should be used")
+    if not options.cleancfg and not options.ccfg and not options.fpanalysis and not options.minremovable and not options.fpanalysisnew and not options.isaccessible:
+        parser.error("At least one of the functionalities: ccfg, isaccessible, cleancfg, fpanalysis or minremovable should be used")
         return False
     if not options.cfginput:
         parser.error("CFG Input must be specifiec with -c")
@@ -23,6 +23,12 @@ def isValidOpts(opts):
 
     if options.cleancfg and (not options.cfginput or not options.separator or not options.input):
         parser.error("All options -c, -i and -s should be provided.")
+        return False
+    elif options.isaccessible and (not options.startfunc or (not options.targetfunc and not options.targetfuncfile)):
+        parser.error("qwerqwer All options -c, --isaccessible, --startfunc and either --targetfunc or --targetfuncfile) should be provided.")
+        return False
+    elif (options.ccfg and ( not options.startfunc or (not options.targetfunc and not options.targetfuncfile)) and ( not options.converttocg )):
+        parser.error("When ccfg is chosen either --startfunc and either --targetfunc or --targetfuncfile should be provided or --converttocg.")
         return False
     elif (options.fpanalysis or options.fpanalysisnew) and (not options.funcname or not options.funcpointerfile or not options.directgraphfile or not options.output):
         parser.error("All options --funcname, --output, --directgraphfile, --funcpointerfile should be provided.")
@@ -76,6 +82,37 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output", default=None, nargs=1,
                       help="Path to store cleaned CFG output")
 
+    parser.add_option("", "--isaccessible", dest="isaccessible", action="store_true", default=False, 
+                      help="Check accessibility")
+
+    ### Conditional CFG Options ###
+    parser.add_option("", "--ccfg", dest="ccfg", action="store_true", default=False,
+                      help="Conditional control flow graph")
+
+    parser.add_option("", "--keepallconditional", dest="keepallconditional", action="store_true", default=False,
+                      help="Keep all conditional edges?")
+
+    parser.add_option("", "--enabledconditions", dest="enabledconditions", default=None, nargs=1, 
+                      help="Enabled conditions")
+
+    parser.add_option("", "--removeindirectedges", dest="removeindirectedges", action="store_true", default=False, 
+                      help="Remove indirect call edges")
+
+    parser.add_option("", "--startfunc", dest="startfunc", default=None, nargs=1,
+                      help="Start function")
+
+    parser.add_option("", "--targetfunc", dest="targetfunc", default=None, nargs=1,
+                      help="Target function")
+
+    parser.add_option("", "--targetfuncfile", dest="targetfuncfile", default=None, nargs=1,
+                      help="Target function file path")
+
+    parser.add_option("", "--printpaths", dest="printpaths", action="store_true", default=False,
+                      help="Enable printing all paths")
+
+    parser.add_option("", "--converttocg", dest="converttocg", default=None, nargs=1,
+                      help="Convert to call graph and write to file")
+
     ### Kernel CFG Cleaner Options ###
     parser.add_option("", "--cleancfg", dest="cleancfg", action="store_true", default=False,
                       help="Clean CFG based on start nodes")
@@ -98,8 +135,14 @@ if __name__ == '__main__':
     parser.add_option("", "--funcpointerfile", dest="funcpointerfile", default=None, nargs=1,
                       help="CFG with functions assigned as function pointers")
 
+    parser.add_option("", "--removedfuncpointerfile", dest="removedfuncpointerfile", default=None, nargs=1,
+                      help="Function assignments removed based on conditional statements")
+
+    parser.add_option("", "--runtimeexecutedfunctionsfile", dest="runtimeexecutedfunctionsfile", default=None, nargs=1,
+                      help="File containing functions which were executed at runtime")
+
     parser.add_option("-f", "--funcname", dest="funcname", default=None, nargs=1,
-                      help="Function name")
+                      help="Function name(s)")
 
     ### Configuration-Guarded Edge Identification ###
     parser.add_option("", "--minremovable", dest="minremovable", action="store_true", default=False,
@@ -126,7 +169,8 @@ if __name__ == '__main__':
         rootLogger = setLogPath("graphcleaner.log")
         myGraph = graph.Graph(rootLogger)
         rootLogger.info("Creating CFG...")
-        myGraph.createGraphFromInput(options.cfginput, options.separator)
+        if ( not options.ccfg ):
+            myGraph.createGraphFromInput(options.cfginput, options.separator)
 
         if ( options.cleancfg ):
             keepList = list()
@@ -178,8 +222,102 @@ if __name__ == '__main__':
             outputFile.close()
             cfgFile.close()
 
+        elif ( options.isaccessible and not options.ccfg):
+            if ( options.targetfunc ):
+                if ( options.printpaths ):
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc, False)
+                    rootLogger.info("allPaths: %s", allPaths)
+                else:
+                    isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+                    rootLogger.info("isAccessible: %s", isAccessible)
+            elif ( options.targetfuncfile ):
+                targetFuncFile = open(options.targetfuncfile, 'r')
+                inputLine = targetFuncFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    if ( options.printpaths ):
+                        allPaths = myGraph.printAllPaths(options.startfunc, inputLine)
+                        rootLogger.info("allPaths to %s: %s", inputLine, allPaths)
+                    else:
+                        isAccessible = myGraph.isAccessible(options.startfunc, inputLine)
+                        rootLogger.info("%s isAccessible: %s", inputLine, isAccessible)
+                    
+                    inputLine = targetFuncFile.readline()
+            #rootLogger.info("isAccessible: %s", isAccessible)
+        elif ( options.ccfg ):
+            rootLogger.info("options.ccfg enabled, running create ccfg function")
+            enabledConditionSet = set()
+            disabledConditionSet = set()
+            if ( options.enabledconditions ):
+                conditionFile = open(options.enabledconditions, 'r')
+                inputLine = conditionFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    #if ( inputLine.endswith("-C:ISENABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISENABLED", "")
+                    #    enabledConditionSet.add(inputLine)
+                    #elif ( inputLine.endswith("-C:ISDISABLED") ):
+                    #    inputLine = inputLine.replace("-C:ISDISABLED", "")
+                    #    disabledConditionSet.add(inputLine)
+                    if ( inputLine.endswith("-C-T:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-T:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
+                        disabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-C-F:ISDISABLED") ):
+                        inputLine = inputLine.replace(":ISDISABLED", "")
+                        disabledConditionSet.add(inputLine)
+                    elif ( inputLine.endswith("-S-T:ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                    elif ( "-S-T->" in inputLine and inputLine.endswith(":ISENABLED") ):
+                        inputLine = inputLine.replace(":ISENABLED", "")
+                        enabledConditionSet.add(inputLine)
+                        # when a switch-case is not config-related we need to enable
+                        # all cases, but how can we know that it's not config based?
+                        # in the if/else case no C-T or C-F in the enabled file meant
+                        # that it's not config-based
+                        # here for any case to know that no other case has been enabled
+                        # either we will add the following to the cases
+                        # now each case can check for this general enabled instance to
+                        # to figure out whether or not any other case was enabled in this file
+                        caller = inputLine.split("-S-T->")[0]
+                        enabledConditionSet.add(caller+"-S-T->")    # generalize so that we know at least one case is enabled
+                    inputLine = conditionFile.readline()
+                
+            myGraph.createConditionalControlFlowGraph(options.cfginput, options.keepallconditional, None, enabledConditionSet, disabledConditionSet, options.removeindirectedges)
+            #isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+            if ( options.converttocg ):
+                rootLogger.info("Converting CCFG to call graph and writing to: %s", options.converttocg)
+                callGraph = myGraph.convertCcfgToCallGraph()
+                callGraph.dumpToFile(options.converttocg)
+            elif ( options.targetfunc ):
+                if ( options.printpaths ):
+                    allPaths = myGraph.printAllPaths(options.startfunc, options.targetfunc, False)
+                    rootLogger.info("allPaths: %s", allPaths)
+                else:
+                    isAccessible = myGraph.isAccessible(options.startfunc, options.targetfunc)
+                    rootLogger.info("isAccessible: %s", isAccessible)
+            elif ( options.targetfuncfile ):
+                targetFuncFile = open(options.targetfuncfile, 'r')
+                inputLine = targetFuncFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    if ( options.printpaths ):
+                        allPaths = myGraph.printAllPaths(options.startfunc, inputLine)
+                        rootLogger.info("allPaths to %s: %s", inputLine, allPaths)
+                    else:
+                        isAccessible = myGraph.isAccessible(options.startfunc, inputLine)
+                        rootLogger.info("%s isAccessible: %s", inputLine, isAccessible)
+                    
+                    inputLine = targetFuncFile.readline()
+            #rootLogger.info("isAccessible: %s", isAccessible)
         elif ( options.fpanalysis ):
-            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
+            myGraph.pruneInaccessibleFunctionPointers(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output, options.removedfuncpointerfile, options.runtimeexecutedfunctionsfile)
         elif ( options.fpanalysisnew ):
             myGraph.pruneAllFunctionPointersNotAccessibleFromChild(options.funcname, options.funcpointerfile, options.directgraphfile, options.separator, options.output)
         elif ( options.minremovable ):

@@ -65,8 +65,8 @@ class ProgressBar(object):
 
 # http://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
 class ColorFormatter(logging.Formatter):
-    FORMAT = ("%(asctime)s [%(levelname)-18s] %(message)s "
-              "($BOLD%(filename)s$RESET:%(lineno)d)")
+    FORMAT = ("[$PHASECOLOR%(phase)-4s$RESET] %(message)s ")
+             # "($BOLD%(filename)s$RESET:%(lineno)d)")
 
     BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
@@ -81,10 +81,17 @@ class ColorFormatter(logging.Formatter):
       'CRITICAL': RED,
       'ERROR': RED
     }
+    PHASECOLORS = {
+      'INIT': RED,
+      'MONITORING': YELLOW,
+      'ANALYSIS': BLUE,
+      'VALIDATION': GREEN
+    }
 
     def formatter_msg(self, msg, use_color = True):
         if use_color:
-            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            #msg = msg.replace("$RESET", self.RESET_SEQ).replace("$BOLD", self.BOLD_SEQ)
+            msg = msg.replace("$RESET", self.RESET_SEQ).replace("$PHASECOLOR", self.BOLD_SEQ)
         else:
             msg = msg.replace("$RESET", "").replace("$BOLD", "")
         return msg
@@ -225,7 +232,7 @@ def readLibrariesWithLdd(elfPath):
     cmd = "ldd " + elfPath
     (returncode, out, err) = runCommand(cmd)
     if ( returncode != 0 ):
-        print("ldd error: " + err)
+        #print("ldd error: " + err)
         return dict()
 
     #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
@@ -239,13 +246,72 @@ def readLibrariesWithLdd(elfPath):
             try:
                 libname, libpath = lib.split(" => ")
                 libname = libname.split(".")[0]         # Library name only w/o version
+                libname = libname.split("-")[0]         # Library name only w/o version
                 libpath = libpath.split("(")[0].strip() # Discard the address
                 loadings[libname] = libpath
 
             except:
                 logging.critical("Parsing Error with %s outcome!" % ("ldd"))
                 logging.critical("Trying to extract libraries with objdump!")
-                loadings = readLibrariesWithObjdump(elfPath)
+                # loadings = readLibrariesWithObjdump(elfPath)
+
+    return loadings
+
+def copyAllDependentLibraries(elfPath, dstPath, logger=None):
+    libToPath = readLibrariesWithLdd(elfPath)
+    if ( len(libToPath) == 0 ):
+        return -1
+    copyCmd = "cp {} {}"
+    for libName, libPath in libToPath.items():
+        if ( os.path.exists(libPath) ):
+            finalCopyCmd = copyCmd.format(libPath, dstPath)
+            returncode, out, err = runCommand(finalCopyCmd)
+            if ( returncode != 0 ):
+                if ( logger ):
+                    logger.error("Error trying to copy library: %s - %s", libPath, err)
+                else:
+                    print("Error trying to copy library: " + libPath + " - " + err)
+    return 0
+                
+
+def readLibrariesWithLddWithFullname(elfPath):
+    """
+    Read the output from ldd command, which are all libraries employed by the given elf file
+    $ ldd /bin/ls
+        linux-vdso.so.1 =>  (0x00007ffda6fb7000)
+        libselinux.so.1 => /lib/x86_64-linux-gnu/libselinux.so.1 (0x00007f74f0e15000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f74f0a4b000)
+        libpcre.so.3 => /lib/x86_64-linux-gnu/libpcre.so.3 (0x00007f74f07db000)
+        libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f74f05d7000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f74f1037000)
+        libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f74f03ba000)
+    :param elfPath:
+    :return:
+    """
+    cmd = "ldd " + elfPath
+    (returncode, out, err) = runCommand(cmd)
+    if ( returncode != 0 ):
+        #print("ldd error: " + err)
+        return dict()
+
+    #proc = subprocess.Popen(["ldd", elfPath], stdout=subprocess.PIPE)
+    #stdout = proc.communicate()[0]
+    loadings = dict()
+
+    # Read all imports and exports per each library
+    for lib in out.split('\n\t'):
+        # Exclude a virtual dynamically linked shared object(VDSO) and a dynamic loader(DL)
+        if 'linux-vdso' not in lib and 'ld-linux' not in lib:
+            try:
+                libname, libpath = lib.split(" => ")
+                libname = libname.strip()#.split(".")[0]         # Library name only w/o version
+                libpath = libpath.split("(")[0].strip() # Discard the address
+                loadings[libname] = libpath
+
+            except:
+                logging.critical("Parsing Error with %s outcome!" % ("ldd"))
+                logging.critical("Trying to extract libraries with objdump!")
+                # loadings = readLibrariesWithObjdump(elfPath)
 
     return loadings
 
@@ -387,6 +453,15 @@ def countRefToNops(sectionData, fixupInfo):
     print [hex(x) for x in sorted(reduce(lambda x,y: x+y, BBLs))]
     print sum(reduce(lambda x,y: x+y, sizes))'''
 
+def getPkgNameFromLibPath(libPath, logger):
+    cmd = "dpkg -S {}"
+    finalCmd = cmd.format(libPath)
+    returncode, out, err = runCommand(finalCmd)
+    if ( returncode != 0 ):
+        logger.error("dpkg cmd: %s failed - err: %s", finalCmd, err)
+        return None
+    return getLibNameWoArchFromDpkgOutput(out)
+
 def getLibNameFromDpkgOutput(dpkgOutput):
     """
     Read file with each library mapped to it's source (this should be provided by the user in the following format:
@@ -400,6 +475,21 @@ def getLibNameFromDpkgOutput(dpkgOutput):
         libname, path = outline.split(": ")
     else:
         libname = ""
+    return libname
+
+def getLibNameWoArchFromDpkgOutput(dpkgOutput):
+    """
+    Read file with each library mapped to it's source (this should be provided by the user in the following format:
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6.0.0
+    libxau6:amd64: /usr/lib/x86_64-linux-gnu/libXau.so.6
+    :return:
+    """
+    outline = dpkgOutput.splitlines()[0]
+    print (outline)
+    if ( ":" in outline ):
+        libname = outline.split(":")[0]
+    else:
+        libname = None
     return libname
 
 def readLibrarySourcePathFromFile(libMapFilePath, ignoreList):
@@ -488,13 +578,16 @@ def readDictFromFile(filePath):
     myFile.close()
     return myDict
 
-def runCommand(cmd):
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def runCommand(cmd, cwd=None):
+    if ( cwd ):
+        proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     #print("running cmd: " + cmd)
     #proc.wait()
     (out, err) = proc.communicate()
-    outStr = str(out.decode("utf-8"))
-    errStr = str(err.decode("utf-8"))
+    outStr = str(out.decode("ISO-8859-1"))
+    errStr = str(err.decode("ISO-8859-1"))
     #print("finished running cmd: " + cmd)
     return (proc.returncode, outStr, errStr)
     #return (proc.returncode, out, err)
@@ -502,6 +595,17 @@ def runCommand(cmd):
 def runCommandWithoutWait(cmd):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return proc
+
+def runCommandWithPid(cmd):
+    proc = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #print("running cmd: " + cmd)
+    #proc.wait()
+    (out, err) = proc.communicate()
+    outStr = str(out.decode("utf-8"))
+    errStr = str(err.decode("utf-8"))
+    #print("finished running cmd: " + cmd)
+    return (proc.returncode, outStr, errStr, proc.pid)
+    #return (proc.returncode, out, err)
 
 def extractImportedFunctionsFromLibc(fileName, logger):
     return extractImportedFunctions(fileName, logger, True)
@@ -527,6 +631,22 @@ def extractImportedFunctions(fileName, logger, libcOnly=False):
             line = line.split()[1]
         functionList.append(line.strip())
     return functionList
+
+def extractExportedFunctionsWithNm(filePath, logger):
+    logger.debug("extracting exported functions for %s", filePath)
+    startNodes = list()
+    cmd = "nm -D --defined-only " + filePath + " | awk '{print $3}'"
+    returncode, out, err = runCommand(cmd)
+    if ( returncode != 0 ):
+        logger.error("Error running nm command for: %s: error: %s", filePath, err)
+        return startNodes
+    lines = out.split("\n")
+    for line in lines:
+        line = line.strip()
+        if ( line != "" ):
+            startNodes.append(line)
+    return startNodes
+
 
 def extractExportedFunctions(fileName, logger):
     cmd = "objdump -T " + fileName + " | grep \"DF\" | grep -v \"UND\" | awk '{print $6,$7}'"
@@ -715,6 +835,87 @@ def cleanStrList(listStr):
     listStr = listStr.replace("'", "")
     listStr = listStr.replace('"', '')
     return listStr
+
+def getAvailableSystemMemory():
+    from psutil import virtual_memory
+    mem = virtual_memory()
+    return mem.available
+
+def getTotalSystemMemory():
+    from psutil import virtual_memory
+    mem = virtual_memory()
+    return mem.total
+
+def getAvailableSystemMemoryInMB():
+    return getAvailableSystemMemory()/(1000000)
+
+def getTotalSystemMemoryInMB():
+    return getTotalSystemMemory()/(1000000)
+
+def addPrefixToCallgraph(callgraphPath, prefix, exceptList, separator="->", outputPath="/tmp/tmp-callgraphs/"):
+    mkdirCmd = "mkdir -p {}"
+    mkdirFinalCmd = mkdirCmd.format(outputPath)
+    returncode, out, err = runCommand(mkdirFinalCmd)
+    if ( returncode != 0 ):
+        print("error creating folder: %s - %s", outputPath, err)
+        sys.exit(-1)
+
+    callgraphName = callgraphPath
+    if ( "/" in callgraphPath ):
+        callgraphName = callgraphPath[callgraphPath.rindex('/')+1:]
+    outputPath = outputPath + callgraphName
+
+    outputFile = open(outputPath, 'w')
+
+    inputFile = open(callgraphPath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedInput = inputLine.split(separator)
+        if ( len(splittedInput) == 2 ):
+            caller = splittedInput[0].strip()
+            callee = splittedInput[1].strip()
+            if ( caller not in exceptList ):
+                caller = prefix + "." + caller
+            if ( callee not in exceptList and not callee.startswith("syscall") ):
+                callee = prefix + "." + callee
+
+            outputFile.write(caller + separator + callee + "\n")
+            outputFile.flush()
+
+        inputLine = inputFile.readline()
+
+    inputFile.close()
+    outputFile.close()
+
+    return outputPath
+
+def convertLibrarySetToDict(libraryPathSet):
+    libraryDict = dict()
+    for libPath in libraryPathSet:
+        libName = convertLibraryPathToName(libPath)
+        libraryDict[libName] = libPath
+    return libraryDict
+
+def convertLibraryPathToName(libraryPath):
+    #if ( libraryPath.endswith(".so") ):
+    #    libraryPath = libraryPath.replace(".so", "")
+    if ( "/" in libraryPath ):
+        libraryPath = libraryPath[libraryPath.rindex("/")+1:]
+    return libraryPath
+
+#create captoid.txt by doing: cat /usr/include/linux/capability.h | grep "define CAP" > captoid.txt
+#and remove the extra couple of lines at the end 
+def createCapIdToStr(filePath="captoid.txt"):
+    capIdToName = dict()
+    inputFile = open(filePath, 'r')
+    inputLine = inputFile.readline()
+    while ( inputLine ):
+        splittedLine = inputLine.split()
+        capName = splittedLine[1]
+        capId = int(splittedLine[2])
+        capIdToName[capId] = capName.lower()
+        inputLine = inputFile.readline()
+    return capIdToName
 
 if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)

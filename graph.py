@@ -12,6 +12,8 @@ class Graph():
     DEFAULT = "orange"    #default (direct/indirect/conditional)
     CONDITIONAL = "yellow"  #conditional
     DIRECT = "blue"   #direct
+    INDIRECT = "red"   #indirect
+    EXT = "purple"   #external
     
     def __init__(self, logger):
         self.logger = logger
@@ -43,6 +45,13 @@ class Graph():
         copyGraph.allNodes = copy.deepcopy(self.allNodes)
         return copyGraph
 
+    def getAllLeafNodes(self):
+        leafNodes = set()
+        for node, outCount in self.nodeOutputs.items():
+            if ( outCount == 0 ):
+                leafNodes.add(node)
+        return leafNodes
+
     def getAllNodes(self):
         return self.allNodes
 
@@ -59,6 +68,11 @@ class Graph():
             self.nodeColor[nodeName] = self.INITIAL
         self.allNodes.add(nodeName)
 
+    def addEdgeWithType(self, srcNode, dstNode, edgeType):
+        self.addEdge(srcNode, dstNode)
+        edgeId = self.edgeTupleToId[(srcNode, dstNode)]
+        self.edgeColor[edgeId] = edgeType
+
     def addEdge(self, srcNode, dstNode):
         self.allNodes.add(srcNode)
         self.allNodes.add(dstNode)
@@ -66,6 +80,7 @@ class Graph():
         currentList = self.adjGraph.get(srcNode, list())
         currentList.append(dstNode)
         self.adjGraph[srcNode] = currentList
+        #self.logger.debug("Adding edge from %s to %s", srcNode, dstNode)
 
         #Add reverse edge
         currentList = self.reverseAdjGraph.get(dstNode, list())
@@ -218,10 +233,22 @@ class Graph():
     After we reach a conclusion on the correctness of applying this to the main function we can merge these 
     two funtions.
     For now we won't to keep the code which generated the paper results intact
+
+    #BUG: If the function address taken extraction code has a bug (which it does as of 9/5/20) this function 
+    #will remove functions which have their address taken, but we just haven't identified them
+    #example: httpd: setup_threads_runtime->ap_unixd_accept
+    #is not extracted by our LLVM pass, if we use the function below we will delete all incoming edges to ap_unixd_accept
+    #while it is used, the previous function (luckily used in the submitted paper) doesn't have this bug
     '''
-    def pruneAllFunctionPointersNotAccessibleFromChild(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
-        indirectOnlyFunctions = self.extractIndirectOnlyFunctions(directCfgFile, separator)
+    def pruneAllFunctionPointersNotAccessibleFromChild(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile):
+        indirectFunctions = self.extractIndirectFunctions(directCfgFile, separator)
         fpFuncToCaller = dict()
+
+        startNodeSet = set()
+        if ( "," in startNodes ):
+            startNodeSet = set(startNodes.split(","))
+        else:
+            startNodeSet.add(startNodes)
 
         fpFile = open(funcPointerFile, 'r')
         fpLine = fpFile.readline()
@@ -240,7 +267,7 @@ class Graph():
 
             fpLine = fpFile.readline()
 
-        for fpFunc in indirectOnlyFunctions:
+        for fpFunc in indirectFunctions:
 #        for fpFunc, callerSet in fpFuncToCaller.items():
             callerSet = fpFuncToCaller.get(fpFunc, set())
             tmpClone = self.deepCopy()
@@ -249,8 +276,9 @@ class Graph():
             tmpClone.deleteOutboundEdges(fpFunc)
             reachableSet = set()
             for caller in callerSet:
-                #Check if caller is reachable from start node
-                reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+                for startNode in startNodeSet:
+                    #Check if caller is reachable from each start node
+                    reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
             callerReachable = (len(reachableSet) > 0)
             self.logger.debug("caller: %s isReachable from child/worker? %s", caller, callerReachable)
@@ -260,7 +288,7 @@ class Graph():
         #Write final graph to file
         self.dumpToFile(outputFile)
 
-    def extractIndirectOnlyFunctions(self, directCfgFile, separator):
+    def extractIndirectFunctions(self, directCfgFile, separator):
         self.applyDirectGraph(directCfgFile, separator)
         indirectFunctions = set()
         
@@ -269,12 +297,11 @@ class Graph():
             for caller in callers:
                 if self.getEdgeType(caller, node) == self.DIRECT:
                     directCallerSet.add(caller)
-                    break
-            if ( len(directCallerSet) == 0 ):
+            if ( len(directCallerSet) != len(set(callers)) ):
                 indirectFunctions.add(node)
         return indirectFunctions
 
-    def pruneInaccessibleFunctionPointers(self, startNode, funcPointerFile, directCfgFile, separator, outputFile):
+    def pruneInaccessibleFunctionPointers(self, startNodes, funcPointerFile, directCfgFile, separator, outputFile, funcPointerFileWoConditions=None, runtimeExecutedFunctionFilePath=None):
         #Apply direct CFG to current graph
         self.applyDirectGraph(directCfgFile, separator)
 
@@ -294,7 +321,14 @@ class Graph():
         #BUG: We have to consider ALL callers of FP before removing the edges
         #We we're previously removing all incoming edges when we identified only 
         #one caller as unreachable from start
+        #FIXED
         fpFuncToCaller = dict()
+
+        startNodeSet = set()
+        if ( "," in startNodes ):
+            startNodeSet = set(startNodes.split(","))
+        else:
+            startNodeSet.add(startNodes)
 
         fpFile = open(funcPointerFile, 'r')
         fpLine = fpFile.readline()
@@ -313,23 +347,90 @@ class Graph():
 
             fpLine = fpFile.readline()
 
+        fpFile.close()
+
+        if ( funcPointerFileWoConditions ):
+            fpFile = open(funcPointerFileWoConditions, 'r')
+            fpLine = fpFile.readline()
+            while ( fpLine ):
+                if ( "->" in fpLine ):
+                    splittedLine = fpLine.split("->")
+                    caller = splittedLine[0].strip()
+                    fpFunc = splittedLine[1].strip()
+                    self.logger.debug("caller: %s, fp: %s", caller, fpFunc)
+
+                    if ( len(fpFuncToCaller.get(fpFunc, set())) == 0 ):
+                        self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+                fpLine = fpFile.readline()
+            fpFile.close()
+
+        #Added to keep track of functions executed at runtime -- for enhanced runtime FP analysis
+        runtimeExecutedFunctions = set()
+        if ( runtimeExecutedFunctionFilePath ):
+            runtimeExecutedFunctionFile = open(runtimeExecutedFunctionFilePath, 'r')
+            executedFuncLine = runtimeExecutedFunctionFile.readline()
+            while ( executedFuncLine ):
+                runtimeExecutedFunctions.add(executedFuncLine.strip())
+                executedFuncLine = runtimeExecutedFunctionFile.readline()
+            runtimeExecutedFunctionFile.close()
+
         for fpFunc, callerSet in fpFuncToCaller.items():
             tmpClone = self.deepCopy()
+            self.logger.debug("Starting analysis for fpFunc: %s", fpFunc)
             
             #Temporarily remove outbound edges from B
+            self.logger.debug("Temporarily removing outbound edges from: %s", fpFunc)
             tmpClone.deleteOutboundEdges(fpFunc)
             reachableSet = set()
+            callerReachable = False
             for caller in callerSet:
-                #Check if caller is reachable from start node
-                reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+                if ( caller in runtimeExecutedFunctions ):      #If the caller is executed at runtime, all fp allocations are reachable
+                    self.logger.debug("caller: %s is in runtimeExecutedFunctions, not removing FP allocation", caller)
+                    callerReachable = True
+                    break
+                for startNode in startNodeSet:
+                    #Check if caller is reachable from each start node
+                    reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
-            callerReachable = (len(reachableSet) > 0)
+            if ( not callerReachable ):
+                callerReachable = (len(reachableSet) > 0)
             self.logger.debug("caller: %s isReachable? %s", caller, callerReachable)
+
             #If caller isn't reachable, permanently remove all indirect calls to B
             if ( not callerReachable ):
                 self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+
         #Write final graph to file
         self.dumpToFile(outputFile)
+
+    def pruneConditionalTrueEdges(self):
+        return True
+
+    def isAccessible(self, startNode, targetNode, filterList=list(), exceptList=list()):
+        results = set()
+        visitedNodes = set()
+        myStack = list()
+        myStack.append(startNode)
+        self.logger.debug("running isAccessible with startNode: %s, targetNode: %s", startNode, targetNode)
+        if ( len(self.adjGraph.get(startNode, list())) == 0 ):
+            self.logger.debug("adjGraph for %s is empty, returning False", startNode)            
+            return False
+
+        while ( len(myStack) != 0 ):
+            currentNode = myStack.pop()
+            if ( currentNode not in visitedNodes):
+                if ( currentNode == targetNode ):
+                    return True
+                self.logger.debug("Visiting node: " + currentNode)
+                visitedNodes.add(currentNode)
+                if ( ( len(filterList) == 0 and len(exceptList) == 0 ) or ( len(filterList) > 0 and currentNode in filterList) or ( len(exceptList) > 0 and currentNode not in exceptList ) ):
+                    results.add(currentNode)
+                if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
+                    for node in self.adjGraph.get(currentNode, list()):
+                        myStack.append(node)
+
+        return False
+
 
     def extractStartingNodes(self):
         self.startingNodes = list()
@@ -355,7 +456,7 @@ class Graph():
         while ( len(myStack) != 0 ):
             currentNode = myStack.pop()
             if ( currentNode not in visitedNodes):
-                self.logger.debug("Visiting node: " + currentNode)
+                #self.logger.debug("Visiting node: " + currentNode)
                 visitedNodes.add(currentNode)
                 if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
                     for node in self.adjGraph.get(currentNode, list()):
@@ -371,6 +472,9 @@ class Graph():
         visitedNodes = set()
         myStack = list()
         myStack.append(nodeName)
+
+        if ( nodeName in filterList ):
+            results.add(nodeName)
 
         if ( len(self.adjGraph.get(nodeName, list())) == 0 ):
             return results
@@ -413,7 +517,7 @@ class Graph():
                         currentNode = currentNode.replace("(","")
                         currentNode = currentNode.replace(")","")
                         currentNode = currentNode.strip()
-                        if ( not currentNode.startswith("%") ):
+                        if ( not currentNode.startswith("%") and currentNode != '' ):
                             results.add(int(currentNode))
 
         return results
@@ -436,18 +540,21 @@ class Graph():
                     for node in self.adjGraph.get(currentNode, list()):
                         myStack.append(node)
                 else:
-                    if ( currentNode.strip().startswith("syscall") ):
+                    if ( currentNode.strip().startswith("syscall") and "(" in currentNode ):
                         #self.logger.debug("getSyscallFromStartNode: currentNode: %s", currentNode)
                         currentNode = currentNode.replace("syscall","")
                         currentNode = currentNode.replace("(","")
                         currentNode = currentNode.replace(")","")
                         currentNode = currentNode.strip()
-                        if ( not currentNode.startswith("%") ):
+                        if ( not currentNode.startswith("%") and currentNode != '' ):
                             results.add(int(currentNode))
+                        else:
+                            self.logger.warning("getSyscallFromStartNodeWithVisitedNodes skipping currentNode: %s", currentNode)
 
         return results, visitedNodes
 
     def createGraphFromInput(self, inputFilePath, separator="->"):
+        self.logger.debug("Running createGraphFromInput...")
         try:
             if ( os.path.isfile(inputFilePath) ):
                 inputFile = open(inputFilePath, 'r')
@@ -466,6 +573,9 @@ class Graph():
                         self.logger.warning("Graph: Skipping line starting with #: %s", inputLine)
                     inputLine = inputFile.readline()
                 inputFile.close()
+            else:
+                self.logger.error("File doesn't exist: %s", inputFilePath)
+                return -1                
         except Exception as e:
             self.logger.error("File doesn't exist: %s", inputFilePath)
             return -1
@@ -492,6 +602,171 @@ class Graph():
             inputLine = inputFile.readline()
         inputFile.close()
 
+    def convertCcfgToCallGraph(self, startNode="main|0"):
+        callGraph = Graph(self.logger)
+
+        addedEdges = set()
+        #visitedFunctions = set()
+        visitedNodes = set()
+
+        for node, nodeList in self.adjGraph.items():
+            if ( node.endswith("|0") ):
+                myStack = list()
+                myStack.append(node)
+
+                while ( len(myStack) != 0 ):
+                    currentNode = myStack.pop()
+                    srcFunc = currentNode
+                    if ( '|' in srcFunc ):
+                        srcFunc = srcFunc[:srcFunc.index('|')]
+                    if ( currentNode not in visitedNodes ):
+                        visitedNodes.add(currentNode)
+                        for dstNode in self.adjGraph.get(currentNode, list()):
+                            dstFunc = dstNode
+                            if ( '|' in dstFunc ):
+                                dstFunc = dstFunc[:dstFunc.index('|')]
+                            if ( srcFunc != dstFunc and (srcFunc, dstFunc) not in addedEdges ):
+                                addedEdges.add((srcFunc, dstFunc))
+                                callGraph.addEdge(srcFunc, dstFunc)
+                            myStack.append(dstNode)
+            else:
+                self.logger.debug("Skipping %s because it doesn't end in |0", node)
+
+        #visitedNodes = set()
+        #addedEdges = set()      #This should be handled in the addEdge function (not changing now, due to unknown effects on other code repos
+        #myStack = list()
+        #myStack.append(startNode)
+
+        #if ( len(self.adjGraph.get(startNode, list())) == 0 ):
+        #    return callGraph 
+
+        #while ( len(myStack) != 0 ):
+        #    currentNode = myStack.pop()
+        #    srcFunc = currentNode
+        #    if ( '|' in srcFunc ):
+        #        srcFunc = srcFunc[:srcFunc.index('|')]
+        #    if ( currentNode not in visitedNodes):
+        #        #self.logger.debug("Visiting node: " + currentNode)
+        #        visitedNodes.add(currentNode)
+        #        for node in self.adjGraph.get(currentNode, list()):
+        #            #self.logger.debug("Adding node: " + node)                    
+        #            dstFunc = node
+        #            if ( '|' in dstFunc ):
+        #                dstFunc = dstFunc[:dstFunc.index('|')]
+        #            if ( srcFunc != dstFunc and (srcFunc, dstFunc) not in addedEdges ):
+        #                addedEdges.add((srcFunc, dstFunc))
+        #                callGraph.addEdge(srcFunc, dstFunc)
+        #            myStack.append(node)
+
+        ##return visitedNodes
+
+
+        ##for srcNode, nodeList in self.adjGraph.items():
+        ##    srcFunc = srcNode
+        ##    if ( '|' in srcFunc ):
+        ##        srcFunc = srcFunc[:srcFunc.index('|')]
+        ##    for dstNode in nodeList:
+        ##        dstFunc = dstNode
+        ##        if ( '|' in dstFunc ):
+        ##            dstFunc = dstFunc[:dstFunc.index('|')]
+        ##        if ( srcFunc != dstFunc ):
+        ##            callGraph.addEdge(srcFunc, dstFunc)
+        return callGraph
+
+
+
+    def createConditionalControlFlowGraph(self, inputFilePath, keepAllConditionalEdges=True, separatorMap=None, enabledConditionSet=set(), disabledConditionSet=set(), removeIndirectEdges=False, intraproceduralOnly=False):
+        #separatorMap: ["default":"->", "conditional":"-C->", "directfunc":"-F->", "indirectfunc": "-INDF->", "extfunc": "-ExtF->"]
+        #In next iterations we might add the specific config option in the -C-> edge type
+        '''
+        currently our file has the following type of lines:
+        F1|BB1->F1|BB2
+        F1|BB2-C-T->F1|BB3
+        F1|BB2-C-F->F1|BB4
+        F1|BB4->F1|BB3
+        F1|BB4-INDF->F3|BB1
+        F1|BB4-F->F4|BB1
+        F1|BB4-ExtF->strcmp
+        '''
+        #TODOs:
+        #1. read and parse file and add nodes and edges corresponding to the file
+        #2. 
+        self.logger.info("Running createConditionalControlFlowGraph function...")
+        if ( not separatorMap ):
+            separatorMap = {"CONDITIONAL-TRUE":"-C-T->", "CONDITIONAL-FALSE":"-C-F->", "DIRECT":"-F->", "INDIRECT": "-INDF->", "EXT": "-ExtF->", "SWITCH-CASE":"-S-T->", "DEFAULT":"->"}
+        try:
+            if ( os.path.isfile(inputFilePath) ):
+                inputFile = open(inputFilePath, 'r')
+                inputLine = inputFile.readline()
+                while ( inputLine ):
+                    inputLine = inputLine.strip()
+                    #self.logger.debug("adding line: %s", inputLine)
+                    #if ( inputLine.startswith("main") ):
+                    #    self.logger.debug("adding line: %s", inputLine)
+                    if ( not inputLine.startswith("#") ):
+                        separatorCount = 0
+                        for separatorName, separator in separatorMap.items():
+                            if ( separator in inputLine ):
+                                splittedInput = inputLine.split(separator)
+                                callerBB = splittedInput[0]
+                                calleeBB = splittedInput[1]
+                                if ( intraproceduralOnly and (separatorName == "INDIRECT" or separatorName == "DIRECT" or separatorName == "EXT" ) ):
+                                    self.logger.debug("Not adding INDIRECT, DIRECT or EXT edge because intraproceduralOnly is TRUE: %s", inputLine)
+                                    break                           
+                                elif ( removeIndirectEdges and separatorName == "INDIRECT" ):
+                                    self.logger.debug("Not adding INDIRECT edge: %s", inputLine)
+                                    break                           
+                                elif ( separatorName == "CONDITIONAL-TRUE" or separatorName == "CONDITIONAL-FALSE"):
+                                    #if ( keepAllConditionalEdges or callerBB in enabledConditionSet or not callerBB in disabledConditionSet ):
+                                    # Changed enabled/disabled conditions to be able to remove both True edge and False edge
+                                    separatorSuffix = separatorMap[separatorName]
+                                    separatorSuffix = separatorSuffix.replace("->", "")
+                                    callerBBWithSep = callerBB + separatorSuffix
+                                    if ( keepAllConditionalEdges or callerBBWithSep in enabledConditionSet or not callerBBWithSep in disabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                        if ( callerBB.startswith("ssl_rand_seed") ):
+                                            self.logger.info("adding line: %s", inputLine)
+                                        self.logger.debug("Skipping input line since it's probably the TRUE branch:\n%s", inputLine)
+                                    else:#if ( inputLine.startswith("ap_run_mpm") ):
+                                        self.logger.info("Not adding edge: %s", inputLine)
+                                    break
+                                elif ( separatorName == "SWITCH-CASE" ):
+                                    if ( keepAllConditionalEdges ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    # if callerBB-S-T is in enabled add
+                                    callerBBWithSep = callerBB + "-S-T"
+                                    callerBBWithSepCallee = callerBB + "-S-T->" + calleeBB
+                                    callerBBWithSepGeneral = callerBB + "-S-T->"    # is this even a config-based switch?
+                                    if ( callerBBWithSep in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    # if callerBB-S-T->calleeBB in enabled add this
+                                    elif ( callerBBWithSepCallee in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    elif ( callerBBWithSepGeneral not in enabledConditionSet ):
+                                        self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    else:
+                                        self.logger.info("Not adding edge: %s", inputLine)
+                                    break
+                                else:
+                                    self.addEdgeWithType(callerBB, calleeBB, separatorName)
+                                    break
+                            else:
+                                separatorCount += 1
+                    if ( separatorCount >= 7 ):
+                        self.logger.error("Skipping line which doesn't have any separators. Is this expected? %s", inputLine)
+                    inputLine = inputFile.readline()
+                inputFile.close()
+            else:
+                self.logger.error("File doesn't exist: %s", inputFilePath)
+                return -1
+        except Exception as e:
+            self.logger.error("File doesn't exist: %s", inputFilePath)
+            return -1
+
+                
+        
+
+    #Deprecated
     def applyConditionalGraph(self, inputFilePath, separator):
         inputFile = open(inputFilePath, 'r')
         inputLine = inputFile.readline()
@@ -504,7 +779,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                 elif ( len(splittedInput) == 3 ):
@@ -514,7 +789,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.CONDITIONAL
                     self.edgeCondition[self.edgeTupleToId[(caller, callee)]] = condition
@@ -535,7 +810,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                 elif ( len(splittedInput) == 3 ):
@@ -545,7 +820,7 @@ class Graph():
                     if ( callee.startswith("@") ):
                         callee = callee[1:]
                     if ( not self.edgeTupleToId.get((caller, callee), None) ):
-                        self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
+                        #self.logger.warning("Trying to change color of non-existent edge in initial graph, adding new edge")
                         self.addEdge(caller, callee)                        
                     self.edgeColor[self.edgeTupleToId[(caller, callee)]] = self.DIRECT
                     self.edgeCondition[self.edgeTupleToId[(caller, callee)]] = condition
@@ -582,9 +857,9 @@ class Graph():
             return
         visitedNodes[startNode] = True
         currentNodeList = self.adjGraph.get(startNode, list())
-#        self.logger.debug("%s->", startNode)
+        self.logger.debug("%s->", startNode)
         for node in currentNodeList:
-#            self.logger.debug("      %s", node)
+            self.logger.debug("      %s", node)
             node = node.strip()
             if ( not visitedNodes[node] and node != endNode ):
                 self.printPath(node, endNode, newPath, visitedNodes, limitedPaths, allPaths)
@@ -600,7 +875,7 @@ class Graph():
                     print ( newPath + "->" + node )
                     allPaths.add(newPath + "->" + node)
 
-        visitedNodes[startNode] = False
+        #visitedNodes[startNode] = False
 
     def toDotCfg(self, outputPath, nodes=None):
         dotFileStr = "digraph \"Call Graph\" {    label=\"Call Graph\"; \n"
