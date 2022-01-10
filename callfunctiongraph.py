@@ -16,6 +16,18 @@ class CallFunctionGraph():
                 cfgfilepath = cfgfilepath[cfgfilepath.rfind("/")+1:]
             self.cfgfilepath = cfgfilepath
 
+    def dumpReachableNodeCount(self, outputpath):
+        outputFile = open(outputpath, 'w')
+        allStartNodes = self.graph.extractStartingNodes()
+
+        if ( not self.nodeDfsDict ):
+            self.nodeDfsDict = self.createAllDfs(allStartNodes)
+
+        for startNode, nodeSet in self.nodeDfsDict.items():
+            if ( startNode.strip() != "" ):
+                outputFile.write(startNode + ":" + str(len(nodeSet)) + "\n")
+        outputFile.close()
+
     def integrateCves(self, requiredStartNodeList, functionToCveDict):
         allStartNodes = self.graph.extractStartingNodes()
         startNodeToCveDict = dict()
