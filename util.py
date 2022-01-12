@@ -470,7 +470,7 @@ def getLibNameFromDpkgOutput(dpkgOutput):
     :return:
     """
     outline = dpkgOutput.splitlines()[0]
-    print (outline)
+    #print (outline)
     if ( ": " in outline ):
         libname, path = outline.split(": ")
     else:
