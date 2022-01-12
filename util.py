@@ -458,7 +458,7 @@ def getPkgNameFromLibPath(libPath, logger):
     finalCmd = cmd.format(libPath)
     returncode, out, err = runCommand(finalCmd)
     if ( returncode != 0 ):
-        logger.error("dpkg cmd: %s failed - err: %s", finalCmd, err)
+        logger.debug("dpkg cmd: %s failed - err: %s", finalCmd, err)
         return None
     return getLibNameWoArchFromDpkgOutput(out)
 
