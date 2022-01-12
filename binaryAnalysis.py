@@ -204,18 +204,18 @@ class BinaryAnalysis:
             finalCmd = cmd.format(self.binaryPath)
             returncode, out, err = util.runCommand(finalCmd)
             if ( returncode != 0 ):
-                self.logger.error("Running cmd: %s - %s", finalCmd, err)
-                self.logger.error("Exiting...")
+                self.logger.debug("Running cmd: %s - %s", finalCmd, err)
+                self.logger.debug("Exiting...")
                 sys.exit(-1)
             self.parseNmOutput(out)
     
         else:
-            self.logger.info("binary doesn't have debug symbols, installing packages first")
+            self.logger.debug("binary doesn't have debug symbols, installing packages first")
             pkgName = self.installDebugSyms()
             if ( pkgName ):
                 self.buildFuncToSizeMap(pkgName)
             else:
-                self.logger.error("Skipping extracting size for library: %s", self.binaryPath)
+                self.logger.debug("Skipping extracting size for library: %s", self.binaryPath)
                 return -1
 
         for funcName in visitedFuncs:
@@ -255,8 +255,8 @@ class BinaryAnalysis:
         finalCmd = cmd.format(pkgName)
         returncode, out, err = util.runCommand(finalCmd)
         if ( returncode != 0 ):
-            self.logger.error("Running package installation failed: %s", err)
-            self.logger.error("Failed to install debug symbols for: %s", pkgName)
+            self.logger.debug("Running package installation failed: %s", err)
+            self.logger.debug("Failed to install debug symbols for: %s", pkgName)
             pkgName = None
             #sys.exit(-1)
             #TODO fix package name from json or something?
@@ -267,7 +267,7 @@ class BinaryAnalysis:
         finalCmd = cmd.format(pkgName)
         returncode, out, err = util.runCommand(finalCmd)
         if ( returncode != 0 ):
-            self.logger.error("Extracting files installed by package %s failed - err: %s", pkgName, err)
+            self.logger.debug("Extracting files installed by package %s failed - err: %s", pkgName, err)
             sys.exit(-1)
 
         """
@@ -300,7 +300,7 @@ class BinaryAnalysis:
             nmFinalCmd = nmCmd.format(dbgFilePath, self.binaryPath)
             returncode, out, err = util.runCommand(nmFinalCmd)
             if ( returncode != 0 ):
-                self.logger.error("Error running nm with debug symbols cmd: %s - err: %s", nmFinalCmd, err)
-                self.logger.error("Skipping file %s", dbgFilePath)
+                self.logger.debug("Error running nm with debug symbols cmd: %s - err: %s", nmFinalCmd, err)
+                self.logger.debug("Skipping file %s", dbgFilePath)
                 continue
             self.parseNmOutput(out)
