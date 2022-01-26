@@ -122,6 +122,8 @@ class Sysdig(MonitoringTool):
         #args=/docker-entrypoint.sh.nginx.-g.daemon off;.
         args = args.strip()
         args = args.replace("args=", "")
+        if ( args.startswith("-e.") ):
+            args = args.replace("-e.", "")
         ''' 
         sysdig aggregates the args into a single string using a dot separator 
         we will consider all the strings possible as paths to scripts 
@@ -129,6 +131,7 @@ class Sysdig(MonitoringTool):
         /docker-entrypoint
         /docker-entrypoint.sh
         /docker-entrypoint.sh.nginx
+        e.g., args=-e./usr/local/bin/docker-entrypoint.sh.nginx.-g.daemon off;.
         ...
         '''
         splitByDot = args.split('.')
