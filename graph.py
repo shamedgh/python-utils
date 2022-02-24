@@ -68,7 +68,7 @@ class Graph():
             count = self.nodeOutputs.get(nodeName, 0)
             self.nodeOutputs[nodeName] = count
             self.nodeColor[nodeName] = self.INITIAL
-            self.outboundEdgesEnabled[nodeName] = True
+        self.outboundEdgesEnabled[nodeName] = True
         self.allNodes.add(nodeName)
 
     def addEdgeWithType(self, srcNode, dstNode, edgeType):
@@ -79,6 +79,8 @@ class Graph():
     def addEdge(self, srcNode, dstNode):
         self.allNodes.add(srcNode)
         self.allNodes.add(dstNode)
+        self.outboundEdgesEnabled[srcNode] = True
+        self.outboundEdgesEnabled[dstNode] = True
         #Add forward edge
         currentList = self.adjGraph.get(srcNode, list())
         currentList.append(dstNode)
