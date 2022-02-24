@@ -26,7 +26,7 @@ class Graph():
         self.edgeIdToTuple = dict()     #edgeId -> tuple(caller, callee)
         self.edgeTupleToId = dict()     #tuple(caller, callee) -> edgeId
         self.edgeColor = dict()     #edgeColor[edgeId] = self.DEFAULT
-        self.edgeEnabled = dict()     #edgeEnabled[edgeId] = TRUE/FALSE
+        self.outboundEdgesEnabled = dict()     #outboundEdgesEnabled[edgeId] = TRUE/FALSE
         self.edgeCondition = dict()     #edgeCondition[edgeId] = CONDITION(%10==null TRUE)
         self.allNodes = set()
         self.edgeId = 0             # keep edge index of graph, starts from 0, increments with adding edge
@@ -42,7 +42,7 @@ class Graph():
         copyGraph.edgeIdToTuple = copy.deepcopy(self.edgeIdToTuple)
         copyGraph.edgeTupleToId = copy.deepcopy(self.edgeTupleToId)
         copyGraph.edgeColor = copy.deepcopy(self.edgeColor)
-        copyGraph.edgeEnabled = copy.deepcopy(self.edgeEnabled)
+        copyGraph.outboundEdgesEnabled = copy.deepcopy(self.outboundEdgesEnabled)
         copyGraph.edgeCondition = copy.deepcopy(self.edgeCondition)
         copyGraph.allNodes = copy.deepcopy(self.allNodes)
         return copyGraph
@@ -68,6 +68,7 @@ class Graph():
             count = self.nodeOutputs.get(nodeName, 0)
             self.nodeOutputs[nodeName] = count
             self.nodeColor[nodeName] = self.INITIAL
+            self.outboundEdgesEnabled[nodeName] = True
         self.allNodes.add(nodeName)
 
     def addEdgeWithType(self, srcNode, dstNode, edgeType):
@@ -110,7 +111,6 @@ class Graph():
         self.edgeIdToTuple[self.edgeId] = (srcNode, dstNode)
         self.edgeTupleToId[(srcNode, dstNode)] = self.edgeId
         self.edgeColor[self.edgeId] = self.DEFAULT
-        self.edgeEnabled[self.edgeId] = True
         self.edgeId += 1
 
     def dfs(self, startNode):
@@ -218,17 +218,11 @@ class Graph():
 
     def enableOutboundEdges(self, node):
         dstNodes = self.adjGraph.get(node, list())
-        self.logger.debug("dstNodes to be enabled: %s", str(dstNodes))
-        for dstNode in dstNodes:
-            edgeId = self.edgeTupleToId[(node, dstNode)]
-            self.edgeEnabled[edgeId] = True
+        self.outboundEdgesEnabled[node] = False
 
     def disableOutboundEdges(self, node):
         dstNodes = self.adjGraph.get(node, list())
-        self.logger.debug("dstNodes to be disabled: %s", str(dstNodes))
-        for dstNode in dstNodes:
-            edgeId = self.edgeTupleToId[(node, dstNode)]
-            self.edgeEnabled[edgeId] = False
+        self.outboundEdgesEnabled[node] = False
 
     def deleteOutboundEdges(self, node):
         dstNodes = copy.deepcopy(self.adjGraph.get(node, list()))
@@ -505,11 +499,9 @@ class Graph():
                 visitedNodes.add(currentNode)
                 if ( ( len(filterList) == 0 and len(exceptList) == 0 ) or ( len(filterList) > 0 and currentNode in filterList) or ( len(exceptList) > 0 and currentNode not in exceptList ) ):
                     results.add(currentNode)
-                if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
+                if ( len(self.adjGraph.get(currentNode, list())) != 0 and self.outboundEdgesEnabled[currentNode] ):     # check if outbound edges are enabled
                     for node in self.adjGraph.get(currentNode, list()):
-                        edgeId = self.edgeTupleToId[(currentNode, node)]    # check if edge is enabled
-                        if ( self.edgeEnabled[edgeId] ):            # we did this to remove cloning of graph in prune inaccessible 2.23.22 for performance
-                            myStack.append(node)
+                        myStack.append(node)
 
         return results
 
