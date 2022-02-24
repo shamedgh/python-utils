@@ -26,9 +26,10 @@ class Graph():
         self.edgeIdToTuple = dict()     #edgeId -> tuple(caller, callee)
         self.edgeTupleToId = dict()     #tuple(caller, callee) -> edgeId
         self.edgeColor = dict()     #edgeColor[edgeId] = self.DEFAULT
+        self.edgeEnabled = dict()     #edgeEnabled[edgeId] = TRUE/FALSE
         self.edgeCondition = dict()     #edgeCondition[edgeId] = CONDITION(%10==null TRUE)
         self.allNodes = set()
-        self.edgeId = 0
+        self.edgeId = 0             # keep edge index of graph, starts from 0, increments with adding edge
 
     def deepCopy(self):
         copyGraph = Graph(self.logger)
@@ -41,6 +42,7 @@ class Graph():
         copyGraph.edgeIdToTuple = copy.deepcopy(self.edgeIdToTuple)
         copyGraph.edgeTupleToId = copy.deepcopy(self.edgeTupleToId)
         copyGraph.edgeColor = copy.deepcopy(self.edgeColor)
+        copyGraph.edgeEnabled = copy.deepcopy(self.edgeEnabled)
         copyGraph.edgeCondition = copy.deepcopy(self.edgeCondition)
         copyGraph.allNodes = copy.deepcopy(self.allNodes)
         return copyGraph
@@ -108,6 +110,7 @@ class Graph():
         self.edgeIdToTuple[self.edgeId] = (srcNode, dstNode)
         self.edgeTupleToId[(srcNode, dstNode)] = self.edgeId
         self.edgeColor[self.edgeId] = self.DEFAULT
+        self.edgeEnabled[self.edgeId] = True
         self.edgeId += 1
 
     def dfs(self, startNode):
@@ -212,6 +215,20 @@ class Graph():
             count = self.nodeOutputs.get(srcNode, 0)
             count -= 1
             self.nodeOutputs[srcNode] = count
+
+    def enableOutboundEdges(self, node):
+        dstNodes = self.adjGraph.get(node, list())
+        self.logger.debug("dstNodes to be enabled: %s", str(dstNodes))
+        for dstNode in dstNodes:
+            edgeId = self.edgeTupleToId[(node, dstNode)]
+            self.edgeEnabled[edgeId] = True
+
+    def disableOutboundEdges(self, node):
+        dstNodes = self.adjGraph.get(node, list())
+        self.logger.debug("dstNodes to be disabled: %s", str(dstNodes))
+        for dstNode in dstNodes:
+            edgeId = self.edgeTupleToId[(node, dstNode)]
+            self.edgeEnabled[edgeId] = False
 
     def deleteOutboundEdges(self, node):
         dstNodes = copy.deepcopy(self.adjGraph.get(node, list()))
@@ -375,12 +392,13 @@ class Graph():
             runtimeExecutedFunctionFile.close()
 
         for fpFunc, callerSet in fpFuncToCaller.items():
-            tmpClone = self.deepCopy()
+            #tmpClone = self.deepCopy()     # removed to just disable edges instead of deleting them
             self.logger.debug("Starting analysis for fpFunc: %s", fpFunc)
             
             #Temporarily remove outbound edges from B
             self.logger.debug("Temporarily removing outbound edges from: %s", fpFunc)
-            tmpClone.deleteOutboundEdges(fpFunc)
+            #tmpClone.deleteOutboundEdges(fpFunc)       # replaced with disabledOutboundEdges
+            self.disableOutboundEdges(fpFunc)       # should enable after we're done here
             reachableSet = set()
             callerReachable = False
             for caller in callerSet:
@@ -390,7 +408,7 @@ class Graph():
                     break
                 for startNode in startNodeSet:
                     #Check if caller is reachable from each start node
-                    reachableSet.update(tmpClone.accessibleFromStartNode(startNode, [caller], list()))
+                    reachableSet.update(self.accessibleFromStartNode(startNode, [caller], list()))
             self.logger.debug("Reachable Set: %s", str(reachableSet))
             if ( not callerReachable ):
                 callerReachable = (len(reachableSet) > 0)
@@ -399,6 +417,7 @@ class Graph():
             #If caller isn't reachable, permanently remove all indirect calls to B
             if ( not callerReachable ):
                 self.deleteInboundEdges(fpFunc.strip(), self.DEFAULT)
+            self.enableOutboundEdges(fpFunc)        # this shouldn't be skipped!!! we shouldn't return or break the loop before this!
 
         #Write final graph to file
         self.dumpToFile(outputFile)
@@ -488,7 +507,9 @@ class Graph():
                     results.add(currentNode)
                 if ( len(self.adjGraph.get(currentNode, list())) != 0 ):
                     for node in self.adjGraph.get(currentNode, list()):
-                        myStack.append(node)
+                        edgeId = self.edgeTupleToId[(currentNode, node)]    # check if edge is enabled
+                        if ( self.edgeEnabled[edgeId] ):            # we did this to remove cloning of graph in prune inaccessible 2.23.22 for performance
+                            myStack.append(node)
 
         return results
 
