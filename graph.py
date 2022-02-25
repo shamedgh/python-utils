@@ -220,7 +220,7 @@ class Graph():
 
     def enableOutboundEdges(self, node):
         dstNodes = self.adjGraph.get(node, list())
-        self.outboundEdgesEnabled[node] = False
+        self.outboundEdgesEnabled[node] = True
 
     def disableOutboundEdges(self, node):
         dstNodes = self.adjGraph.get(node, list())
