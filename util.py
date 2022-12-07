@@ -921,3 +921,7 @@ if __name__ == '__main__':
     # Use this util inside IDA Pro only (alt+F7 -> script file)
     getBBLsFromIDA()
 
+def getLastLineNo(filepath):
+    inputFile = open(filepath, 'r')
+    inputLines = inputFile.readlines()
+    return len(inputLines)

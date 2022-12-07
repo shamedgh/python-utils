@@ -3,6 +3,9 @@ import os
 import util
 import re
 
+BEGINLINEOFFSET=5
+BEGINCHARSOFFSET=20
+
 class BinaryAnalysis:
     """
     This class can be used to extract direct system calls and possibly other information from a binary
@@ -10,6 +13,8 @@ class BinaryAnalysis:
     def __init__(self, binaryPath, logger):
         self.binaryPath = binaryPath
         self.funcSizeMap = dict()
+        self.funcAddrs = dict()
+        self.funcToFileLine = dict()
         self.logger = logger
 
     def cleanName(self):
@@ -304,3 +309,111 @@ class BinaryAnalysis:
                 self.logger.debug("Skipping file %s", dbgFilePath)
                 continue
             self.parseNmOutput(out)
+
+    def extractFuncAddrs(self, funcName=""):
+        cmd = "objdump -T " + self.binaryPath + " | grep DF | grep .text"
+        if ( funcName != "" ):
+            cmd = cmd + " | grep " + funcName
+        self.logger.debug("running cmd: %s", cmd)
+        returncode, out, err = util.runCommand(cmd)
+        if ( returncode != 0 ):
+            self.logger.error("Error in running cmd: %s, out: %s, err: %s\n", cmd, out, err)
+            return False
+        for line in out.splitlines():
+            tokens = line.split()
+            if ( len(tokens) < 2 ):
+                continue
+            addr = tokens[0]
+            funcName = tokens[-1]
+            self.funcAddrs[funcName] = addr
+        return True
+
+    def convertAddrsToSrcLine(self):
+        fileToLines = dict()
+        cmd = "addr2line -e {} {}"
+        for func, addr in self.funcAddrs.items():
+            finalcmd = cmd.format(self.binaryPath, addr)
+            returncode, out, err = util.runCommand(finalcmd)
+            if ( returncode != 0 ):
+                self.logger.error("Error in running cmd: %s, out: %s, err: %s\n", cmd, out, err)
+                return False
+            out = out.strip()
+            if ( out == "??:0" or out == "??:?" or out == "" ):
+                self.logger.warning("not line found for func: %s, addr: %s in binary: %s\n", func, addr, self.binaryPath)
+                continue
+            # output format: /home/hamed/rust-projects/c-source-codes/libcsv/libcsv.c:164
+            tokens = out.split(':')
+            filename = tokens[0]
+            linenumber = -1
+            try:
+                linenumber = int(tokens[1])     # only has start line no
+            except:
+                self.logger.error("error parsing addr2line output: %s, err: %s\n", out, err)
+                continue
+            lineToFunc = fileToLines.get(filename, dict())
+            lineToFunc[linenumber] = func
+            fileToLines[filename] = lineToFunc
+        '''
+        since addr2line only returns start line and not end line of function
+        we will sort the start lines and consider the next item in the sorted list
+        as the end of the previous function
+        '''
+        for fileName, lineToFunc in fileToLines.items():    # sort based on line no
+            sortedLineToFunc = dict(sorted(lineToFunc.items()))
+            funcStartLine = dict()
+            funcEndLine = dict()
+            prevFunc = ""
+            allFuncs = set()
+            for lineNo, funcName in sortedLineToFunc.items():
+                self.logger.debug("lineNo: %d, funcName: %s", lineNo, funcName)
+                allFuncs.add(funcName)
+                funcStartLine[funcName] = lineNo - BEGINLINEOFFSET
+                if ( prevFunc != "" ):
+                    funcEndLine[prevFunc] = lineNo
+                prevFunc = funcName
+            # last element won't have an end line no -> we'll assume its the end of the file
+            funcEndLine[prevFunc] = util.getLastLineNo(fileName)
+            for func in allFuncs:
+                self.logger.debug("func: %s, startLine: %d, endLine: %d", 
+                                            func, 
+                                            funcStartLine.get(func, 0),
+                                            funcEndLine.get(func, 0))
+                self.convertToTuple(func, fileName, funcStartLine.get(func, 0), funcEndLine.get(func, 0))
+        return True
+
+    def convertToTuple(self, funcName, fileName, startLine, endLine):
+        self.funcToFileLine[funcName] = (fileName, startLine, endLine)
+
+    def extractFuncSrcInfo(self):
+        '''
+        1. use objdump to find funcName in binary
+        2. extract address of funcName
+        3. pass address to addr2line program
+        '''
+        if ( len(self.funcToFileLine) != 0 ):
+            return
+        if ( not self.extractFuncAddrs() ):
+            self.logger.error("failed to extract function addrs for %s\n", self.binaryPath)
+        #addr = self.funcAddrs.get(funcName, "")
+        #self.logger.debug("addr for func: %s is: %s\n", funcName, addr)
+        if ( not self.convertAddrsToSrcLine() ):
+            self.logger.error("failed to convert addresses to src line\n")
+        return
+
+    def extractFuncSrcCode(self, funcName):
+        self.extractFuncSrcInfo()
+        funcLineTuple = self.funcToFileLine[funcName]
+        fileName = funcLineTuple[0]
+        startLine = funcLineTuple[1]
+        endLine = funcLineTuple[2]
+        cmd = "awk 'NR >= {} && NR <= {}' {}"
+        cmd = cmd.format(startLine, endLine, fileName)
+        returncode, out, err = util.runCommand(cmd)
+        if ( returncode != 0 ):
+            self.logger.error("extractFuncSrcCode failed, out: %s, err: %s\n", out, err)
+            return err
+        if ( "}" in out ):
+            out = out[:out.rindex('}')+1]
+        if ( "}" in out[:BEGINCHARSOFFSET] ):
+            out = out[out.index('}')+1:]
+        return out
