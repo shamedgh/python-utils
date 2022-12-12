@@ -740,6 +740,9 @@ def deleteFolder(folder, logger):
 def isFolder(filePath):
     return os.path.isdir(filePath)
 
+def isFile(filePath):
+    return os.path.isfile(filePath)
+
 def repeatColumn(filePath, separator, fieldNumber):
     myFile = open(filePath, 'r')
     line = myFile.readline()
@@ -925,3 +928,8 @@ def getLastLineNo(filepath):
     inputFile = open(filepath, 'r')
     inputLines = inputFile.readlines()
     return len(inputLines)
+
+def readFile(filepath):
+    inputFile = open(filepath, 'r')
+    inputLines = inputFile.readlines()
+    return inputLines
