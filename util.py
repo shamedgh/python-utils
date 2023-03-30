@@ -526,6 +526,16 @@ def writeConfigToFile(configFilePath, configString):
     f.write(configString)
     f.close()
 
+def writeToFile(filePath, string):
+    f = open(filePath, "w")
+    f.write(string)
+    f.close()
+
+def createFolder(path, mode=0o666):
+    if ( isFolder(path) ):
+        return
+    os.mkdir(path)
+
 def pkillProcess(pid, exeName):
     os.kill(pid, signal.SIGINT)
     exeCmd = "pkill " + exeName
